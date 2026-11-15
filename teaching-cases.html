@@ -1,0 +1,2973 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SGRT topography &amp; registration simulator</title>
+<style>
+:root{
+  --bg:#0d1316; --panel:#141d21; --panel2:#1b262b; --panel3:#223036;
+  --line:#29373d; --line2:#3a4c54;
+  --ink:#e2ecef; --dim:#8ba0a8; --dim2:#5f747b;
+  --sig:#2fd4c1; --hot:#ff6a52; --cold:#56a2ff; --ok:#86d95f; --amber:#ffc046;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace;
+  --sans:"IBM Plex Sans",ui-sans-serif,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--sans);
+  font-size:14px; line-height:1.55; -webkit-font-smoothing:antialiased;
+}
+a{color:var(--sig)}
+h1,h2,h3{margin:0;font-weight:600;letter-spacing:-0.01em}
+h1{font-size:26px;line-height:1.2}
+h2{font-size:17px}
+h3{font-size:13px;color:var(--dim);font-weight:600}
+p{margin:0 0 10px}
+.wrap{max-width:1500px;margin:0 auto;padding:0 20px 80px}
+
+/* ---- masthead ---- */
+header{
+  border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#111a1e,#0d1316);
+  padding:26px 0 22px; margin-bottom:22px;
+}
+.mast{max-width:1500px;margin:0 auto;padding:0 20px;display:flex;gap:28px;align-items:flex-end;flex-wrap:wrap}
+.mast .lede{max-width:62ch;color:var(--dim);font-size:14.5px}
+.mast .lede strong{color:var(--ink);font-weight:500}
+.tick{font-family:var(--mono);font-size:11px;color:var(--dim2);letter-spacing:.04em}
+
+/* ---- layout ---- */
+.console{display:grid;grid-template-columns:314px minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:1020px){.console{grid-template-columns:1fr}}
+/* grid/flex children must be allowed to shrink below their content width,
+   otherwise the wide data tables force the whole page to scroll sideways */
+.console>*,.stage>*,.grid2>*,.grid3>*{min-width:0}
+.card,.card>.bd,.card>.hd,.rail{min-width:0}
+.rail{position:sticky;top:14px;display:flex;flex-direction:column;gap:12px}
+@media (max-width:1020px){.rail{position:static}}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:5px}
+.card > .hd{
+  display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+  padding:10px 13px;border-bottom:1px solid var(--line);background:var(--panel2);
+  border-radius:4px 4px 0 0;
+}
+.card > .bd{padding:13px}
+.hd h2{font-size:13.5px}
+.hd .note{font-family:var(--mono);font-size:10.5px;color:var(--dim2)}
+
+/* ---- controls ---- */
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:14px}
+.seg button{
+  font:500 12.5px/1 var(--sans);color:var(--dim);background:var(--panel2);
+  border:1px solid var(--line);border-radius:4px;padding:9px 6px;cursor:pointer;
+  transition:background .12s,color .12s,border-color .12s;
+}
+.seg button:hover{color:var(--ink);border-color:var(--line2)}
+.seg button[aria-pressed="true"]{background:#0f2b2b;color:var(--sig);border-color:#2b6d68}
+.fld{margin-bottom:12px}
+.fld:last-child{margin-bottom:0}
+.fld label{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12.5px;color:var(--dim);margin-bottom:5px}
+.fld label .v{font-family:var(--mono);font-size:12px;color:var(--sig);font-variant-numeric:tabular-nums}
+.fld label .v.off{color:var(--dim2)}
+.hint{font-size:11.5px;color:var(--dim2);margin-top:4px;line-height:1.45}
+input[type=range]{width:100%;-webkit-appearance:none;appearance:none;background:transparent;height:18px;margin:0;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:3px;background:var(--line2);border-radius:2px}
+input[type=range]::-moz-range-track{height:3px;background:var(--line2);border-radius:2px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--sig);border:2px solid var(--panel);margin-top:-5.5px}
+input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:var(--sig);border:2px solid var(--panel)}
+input[type=range]:focus-visible{outline:2px solid var(--sig);outline-offset:3px;border-radius:3px}
+input[type=number],select{
+  width:100%;background:var(--panel2);color:var(--ink);border:1px solid var(--line);
+  border-radius:4px;padding:6px 8px;font:400 12.5px var(--mono);
+}
+input[type=number]:focus,select:focus{outline:none;border-color:var(--sig)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;width:100%;
+  font:600 13px/1 var(--sans);color:#04211f;background:var(--sig);border:none;
+  border-radius:4px;padding:11px 12px;cursor:pointer;transition:filter .12s;
+}
+.btn:hover{filter:brightness(1.1)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.ghost{background:transparent;color:var(--dim);border:1px solid var(--line)}
+.btn.ghost:hover{color:var(--ink);border-color:var(--line2);filter:none}
+.btn.sm{padding:7px 10px;font-size:12px;width:auto}
+button:focus-visible{outline:2px solid var(--sig);outline-offset:2px}
+details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}
+details summary{cursor:pointer;font-size:12.5px;color:var(--dim);list-style:none;display:flex;align-items:center;gap:6px}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:"+";font-family:var(--mono);color:var(--sig)}
+details[open] summary::before{content:"–"}
+details .inner{padding-top:11px}
+.presets{display:flex;flex-wrap:wrap;gap:5px}
+.presets button{
+  font:400 11.5px/1 var(--sans);color:var(--dim);background:var(--panel2);
+  border:1px solid var(--line);border-radius:20px;padding:6px 11px;cursor:pointer;
+}
+.presets button:hover{color:var(--sig);border-color:#2b6d68}
+
+/* ---- viewport ---- */
+.stage{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:1240px){.stage{grid-template-columns:1fr}}
+.viewport{position:relative;background:#080d0f;border-radius:4px;overflow:hidden}
+.viewport canvas{display:block;width:100%;height:auto;touch-action:none;cursor:grab}
+.viewport canvas:active{cursor:grabbing}
+.vp-tabs{display:flex;gap:4px;padding:9px 13px 0}
+.vp-tabs button{
+  font:500 11.5px/1 var(--sans);color:var(--dim);background:transparent;border:1px solid transparent;
+  border-bottom:none;border-radius:4px 4px 0 0;padding:7px 11px;cursor:pointer;
+}
+.vp-tabs button[aria-pressed="true"]{color:var(--sig);background:#080d0f;border-color:var(--line)}
+.legend{display:flex;align-items:center;gap:9px;padding:9px 13px;font-family:var(--mono);font-size:10.5px;color:var(--dim2)}
+.ramp{flex:1;height:8px;border-radius:2px}
+
+/* ---- readouts ---- */
+.bars{display:flex;flex-direction:column;gap:11px}
+.bar-row{display:grid;grid-template-columns:20px 1fr 74px;gap:10px;align-items:center}
+.bar-row .ax{font-family:var(--mono);font-size:12px;color:var(--dim)}
+.bar-track{display:block;height:9px;background:#0a1114;border:1px solid var(--line);border-radius:2px;overflow:hidden;position:relative}
+.bar-fill{display:block;height:100%;min-width:2px;background:var(--sig);transition:width .18s ease}
+.bar-fill.dead{background:var(--hot)}
+.bar-row .num{font-family:var(--mono);font-size:11.5px;text-align:right;color:var(--ink);font-variant-numeric:tabular-nums}
+.bar-row .num.dead{color:var(--hot)}
+.kv{display:grid;grid-template-columns:1fr auto;gap:3px 12px;font-size:12.5px}
+.kv dt{color:var(--dim)}
+.kv dd{margin:0;font-family:var(--mono);font-size:12px;text-align:right;font-variant-numeric:tabular-nums}
+.verdict{
+  border-left:3px solid var(--line2);padding:9px 0 9px 12px;margin-top:14px;
+  font-size:12.8px;color:var(--dim);line-height:1.5;
+}
+.verdict.bad{border-color:var(--hot)} .verdict.warn{border-color:var(--amber)} .verdict.good{border-color:var(--ok)}
+.verdict b{color:var(--ink);font-weight:600}
+
+/* ---- tables ---- */
+.tblwrap{max-height:340px;overflow:auto;border:1px solid var(--line);border-radius:4px}
+table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11.5px;font-variant-numeric:tabular-nums}
+thead th{
+  position:sticky;top:0;background:var(--panel3);color:var(--dim);font-weight:500;
+  text-align:right;padding:7px 9px;border-bottom:1px solid var(--line2);white-space:nowrap;font-size:10.5px;
+}
+thead th:first-child{text-align:left}
+tbody td{padding:5px 9px;text-align:right;border-bottom:1px solid #1e2a2f;color:var(--ink)}
+tbody td:first-child{text-align:left;color:var(--dim)}
+tbody tr:hover td{background:#18242a}
+td.flagged{color:var(--hot);font-weight:600}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+@media (max-width:900px){.grid2,.grid3{grid-template-columns:1fr}}
+.chart{width:100%;height:auto;display:block}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:1px;background:var(--line)}
+.stat{background:var(--panel);padding:11px 13px}
+.stat .lbl{font-size:11.5px;color:var(--dim);margin-bottom:3px}
+.stat .val{font-family:var(--mono);font-size:19px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.stat .sub{font-family:var(--mono);font-size:10.5px;color:var(--dim2)}
+.empty{padding:44px 20px;text-align:center;color:var(--dim2);font-size:13px}
+.err{background:#2a1210;border:1px solid #6b2a20;color:#ffb0a3;padding:11px 13px;border-radius:4px;font-size:12.5px;margin-bottom:12px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.teach{font-size:13px;color:var(--dim);max-width:78ch}
+.teach b{color:var(--ink);font-weight:500}
+.axkey{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+section.blk{margin-top:22px}
+.blk-hd{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap;margin-bottom:11px;padding-bottom:9px;border-bottom:1px solid var(--line)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+/* v2: a deliberately small teaching surface above the full laboratory. */
+:root{--dim:#afc0c7;--dim2:#91a8b2;--sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;--mono:ui-monospace,"SFMono-Regular",Consolas,monospace}
+[hidden]{display:none!important}body{background:#0c151b}.wrap{max-width:1460px;padding-bottom:42px}header{margin-bottom:0;background:#101b23;padding:26px 0}.mast{max-width:1460px;justify-content:space-between;align-items:center}.mast h1{font-size:clamp(23px,2.4vw,32px);letter-spacing:-.035em}.mast .lede{max-width:53ch;font-size:13px}.tick{color:#91a8b2;font-size:10px;letter-spacing:.09em}.modebar{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:20px 0}.mode-switch{display:inline-flex;background:#091117;border:1px solid #31434e;border-radius:10px;padding:4px;gap:4px}.mode-switch button{font:600 13px var(--sans);background:transparent;color:var(--dim);border:0;padding:10px 21px;border-radius:7px;cursor:pointer}.mode-switch button[aria-pressed=true]{color:#082b2a;background:#66dfce}.offline-note{font-size:11px;color:var(--dim2)}.lesson-layout{display:grid;grid-template-columns:238px minmax(0,1fr);gap:28px;align-items:start}.lesson-nav{display:flex;flex-direction:column;gap:7px}.lesson-nav-title{color:#9eb4c0;font-size:10px;letter-spacing:.12em;text-transform:uppercase;margin:4px 0 8px 12px;font-weight:650}.case-button{display:flex;gap:12px;text-align:left;align-items:flex-start;padding:14px 12px;border:1px solid transparent;border-radius:9px;background:transparent;color:#bacbd2;font-family:var(--sans);cursor:pointer}.case-button:hover{background:#14232d}.case-button[aria-pressed=true]{background:#162b33;border-color:#326967;color:#e4fbf6}.case-button .case-index{font:500 11px var(--mono);color:#6de0cf;padding-top:3px}.case-button strong{display:block;font-size:13px;font-weight:600}.case-button small{display:block;font-size:11px;line-height:1.5;color:#92aab6;margin-top:4px}.nav-footer{margin:17px 12px 0;padding-top:17px;border-top:1px solid #2b3c47;font-size:11px;line-height:1.6;color:#a3b7c1}.nav-footer b{color:#d2e2e8}.lesson-main,.lesson-main>*{min-width:0}.lesson-kicker{display:flex;gap:10px;align-items:center;color:#6de0cf;font-size:10px;letter-spacing:.11em;text-transform:uppercase;font-weight:650}.lesson-kicker .pill{font-size:10px;letter-spacing:0;text-transform:none;color:#afc3cd;background:#192a34;padding:4px 8px;border-radius:5px}.lesson-main h2{font-size:clamp(23px,2.5vw,31px);line-height:1.2;letter-spacing:-.03em;margin:10px 0}.lesson-question{font-size:14px;line-height:1.6;max-width:80ch;color:#bdced5;margin-bottom:18px}.experiment{background:#111f29;border:1px solid #30424d;border-radius:12px;overflow:hidden}.experiment-head{display:flex;align-items:center;justify-content:space-between;padding:11px 16px;gap:8px;border-bottom:1px solid #2a3e4a;flex-wrap:wrap}.experiment-head strong{font-size:12px;font-weight:550;color:#cadae1}.mini-tabs{display:inline-flex;gap:4px;flex-wrap:wrap}.mini-tabs button,.chip{border:1px solid #344b58;background:#122530;color:#b4c8d2;font:500 11px var(--sans);border-radius:5px;padding:6px 9px;cursor:pointer}.mini-tabs button[aria-pressed=true],.chip[aria-pressed=true]{border-color:#6adccb;background:#183e40;color:#a8f6e6}.demo-grid{display:grid;grid-template-columns:minmax(0,1fr) 250px}.demo-visual{min-width:0;background:#0b1820}.demo-visual canvas{display:block;width:100%;aspect-ratio:1.6;touch-action:pan-y}.scene-key{display:flex;flex-wrap:wrap;gap:9px 17px;padding:10px 16px;color:#b5cbd4;font-size:10px;border-top:1px solid #20333e}.scene-key span:before{content:'';display:inline-block;width:17px;height:2px;background:#69dccb;margin-right:6px;vertical-align:middle}.scene-key .live:before{background:#ffc16b}.scene-key .other:before{background:#bcadff}.scene-caption{font-size:11px;line-height:1.55;color:#a7becb;padding:0 16px 13px;min-height:39px}.lesson-settings{border-left:1px solid #2a3e4a;padding:17px;display:flex;flex-direction:column;gap:17px}.lesson-settings .control-group{margin:0}.lesson-settings label{font-size:12px;display:flex;justify-content:space-between;gap:6px;color:#c8dbe2;margin-bottom:10px}.lesson-settings output{color:#71e7d3;font:500 12px var(--mono)}.lesson-settings .control-help{font-size:11px;line-height:1.5;color:#a0b7c3;margin:5px 0 0}.lesson-settings .mini-tabs{display:grid;grid-auto-columns:1fr;grid-auto-flow:column}.lesson-settings .mini-tabs button{padding:9px 4px;font-size:11px}.try-box{margin-top:auto;background:#192f3a;border:1px solid #34505f;border-radius:7px;padding:11px 12px;font-size:11px;line-height:1.6;color:#c1d5df}.try-box strong{display:block;color:#81e5d4;font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}.small-actions{display:flex;gap:7px}.small-actions button{flex:1;font-size:11px;padding:8px;border:1px solid #3a5260;color:#c0d1d9;background:transparent;border-radius:5px;cursor:pointer}.small-actions button:hover{background:#213845}.reading-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:#2a3e49;border-top:1px solid #2a3e49}.reading{background:#14252f;padding:15px}.reading .label{font-size:11px;color:#bdd0d9;line-height:1.4;min-height:16px}.reading .value{font:550 clamp(19px,2vw,25px) var(--mono);letter-spacing:-.05em;margin:7px 0;color:#e6f4f7}.reading .sub{font-size:10px;line-height:1.5;color:#a0b9c5}.reading.emphasis .value{color:#ffcf90}.reading.teal .value{color:#70e3d0}.interpret-grid{display:grid;grid-template-columns:1.25fr 1fr;gap:14px;margin-top:14px}.explain-card{border:1px solid #2c444f;border-radius:9px;padding:17px;background:#11222b}.explain-card.observation{border-left:3px solid #e7b36a}.eyebrow{font-size:10px;color:#8cabb9;letter-spacing:.09em;text-transform:uppercase;font-weight:650}.explain-card h3{font-size:15px;color:#e2f0f3;line-height:1.45;margin:5px 0 6px}.explain-card p{font-size:12px;line-height:1.65;color:#b7ccd5;margin:0}.lesson-detail{border-top:0;background:#11212a;border:1px solid #2b424e;border-radius:8px;margin:14px 0 0;padding:0}.lesson-detail summary{padding:13px 16px;font-size:12px}.lesson-detail .inner{padding:0 16px 16px;font-size:12px;color:#b9ccd5;line-height:1.65}.lesson-detail .inner p{margin:10px 0}.lesson-detail .tblwrap{margin-top:10px;max-height:none}.lesson-detail table{font-size:11px}.lesson-detail th{position:static;font:550 11px var(--sans)}.lesson-detail td:first-child{font-family:var(--sans)}.lesson-next{display:flex;justify-content:space-between;gap:8px;margin:17px 0;align-items:center}.lesson-next button{border:1px solid #34515e;border-radius:6px;background:transparent;color:#baceD8;padding:9px 13px;font:550 12px var(--sans);cursor:pointer}.lesson-next .next-case{background:#243e49;border-color:#3c6372;color:#e0f2f7}.lesson-next button:disabled{opacity:.35;cursor:default}.limits-footer{color:#92acb9;font-size:11px;line-height:1.65;border-top:1px solid #283d49;margin-top:22px;padding-top:16px}.limits-footer a{color:#93ddcf}.advanced-intro{display:flex;gap:14px;justify-content:space-between;align-items:center;margin:2px 0 18px;padding:15px 18px;background:#14252e;border:1px solid #2b414c;border-radius:8px}.advanced-intro p{font-size:12px;color:#a4bdc8;margin:3px 0 0}.bar-row{grid-template-columns:20px 1fr 101px}.card{border-radius:8px}.btn.sm{min-height:32px}.vp-tabs{flex-wrap:wrap}.btn:focus-visible,.case-button:focus-visible,button:focus-visible{outline:2px solid #8effe2;outline-offset:3px}.course-model-note{font-size:11px;color:#a2b8c3;margin:12px 0}.modebar button{min-height:40px}
+@media(max-width:1100px){.lesson-layout{grid-template-columns:205px minmax(0,1fr);gap:20px}.demo-grid{grid-template-columns:1fr}.lesson-settings{border-left:0;border-top:1px solid #2a3e4a;display:grid;grid-template-columns:1fr 1fr;align-items:start}.try-box{margin-top:0}.small-actions{grid-column:1/-1}.demo-visual canvas{aspect-ratio:1.75}.interpret-grid{grid-template-columns:1fr}.mast .lede{max-width:100%;margin-top:0!important}}
+@media(max-width:720px){.wrap{padding:0 14px 28px}.mast{padding:0 16px;gap:10px}header{padding:20px 0}.mast .lede{font-size:12px}.modebar{padding:15px 0}.offline-note{display:none}.mode-switch{width:100%}.mode-switch button{flex:1;padding:9px 12px}.lesson-layout{grid-template-columns:1fr;gap:17px}.lesson-nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}.lesson-nav-title{grid-column:1/-1;margin:0 0 4px;font-size:9px}.case-button{padding:9px 8px;gap:7px;background:#101f28;border-color:#253b47}.case-button strong{font-size:11px}.case-button .case-index{font-size:10px}.case-button small,.nav-footer{display:none}.lesson-main h2{font-size:25px}.lesson-question{font-size:13px;margin-bottom:14px}.lesson-kicker{font-size:9px}.reading-grid{grid-template-columns:1fr 1fr}.reading{padding:13px}.reading .value{font-size:24px}.reading .label{font-size:11px}.lesson-settings{padding:14px;gap:16px 13px}.lesson-settings .mini-tabs button{font-size:10px}.scene-caption{font-size:10px}.interpret-grid{gap:10px}.lesson-next{flex-wrap:wrap}.lesson-next button{font-size:11px}.advanced-intro{align-items:flex-start}.advanced-intro button{white-space:nowrap}.lesson-detail table{min-width:420px}.demo-visual canvas{aspect-ratio:1.2}.experiment-head{padding:10px 12px}.try-box{font-size:10px}.lesson-settings label{font-size:11px}.lesson-settings .control-help{font-size:10px}.scene-key{font-size:9px}}
+@media print{.modebar,.lesson-nav,.lesson-settings,.lesson-next,.nav-footer{display:none}.lesson-layout{display:block}body{print-color-adjust:exact;-webkit-print-color-adjust:exact}.lesson-main{break-inside:avoid}}
+
+
+/* ---------- v3 teaching components ---------- */
+.lesson-scenario{display:flex;gap:12px;align-items:baseline;background:#13232c;border:1px solid #2a404b;border-left:3px solid #6de0cf;border-radius:8px;padding:11px 14px;margin:0 0 12px;max-width:92ch}
+.lesson-scenario .eyebrow{flex:none;color:#6de0cf}
+.lesson-scenario p{margin:0;font-size:13.5px;line-height:1.6;color:#d3e4ea}
+.lesson-question{font-weight:500}
+.reading .label{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.badge{display:inline-block;font:650 9.5px var(--sans);letter-spacing:.07em;text-transform:uppercase;padding:2px 6px;border-radius:4px;background:#22343e;color:#b7cad3}
+.reading.good .value{color:#9be884}.reading.good .badge{background:#1d3a24;color:#aef095}
+.reading.warn .value{color:#ffcf7a}.reading.warn .badge{background:#3d3218;color:#ffd98f}
+.reading.bad .value{color:#ff8f78}.reading.bad .badge{background:#43211c;color:#ffad9b}
+.reading.idle .value{color:#7f99a5}
+.reading.pending .value{color:#7f99a5}
+.reading .value small{font-size:.55em;letter-spacing:0;margin-left:3px;color:#a7bdc8;font-family:var(--sans);font-weight:500}
+.reading.beam .value{font-family:var(--sans);font-weight:700;letter-spacing:-.02em}
+.reading.word .value{font-size:clamp(17px,1.6vw,21px);letter-spacing:-.02em;line-height:1.35}
+.lesson-extra{border-top:1px solid #2a3e49;background:#122029}
+.lesson-extra:empty{display:none}
+.topo-strip{display:grid;grid-template-columns:minmax(190px,1.15fr) repeat(3,minmax(0,1fr));gap:1px;background:#2a3e49}
+.topo-strip>*{background:#122029;padding:13px 15px}
+.topo-intro b{display:block;font-size:12px;color:#e2f0f3;margin-bottom:4px}
+.topo-intro span{display:block;font-size:11px;line-height:1.5;color:#a3bac5}
+.topo-label{font-size:11px;color:#bdd0d9;line-height:1.35}
+.topo-val{font:550 19px var(--mono);letter-spacing:-.04em;color:#e6f4f7;margin:6px 0 7px;display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.topo-val small{font:500 11px var(--sans);color:#a7bdc8;letter-spacing:0}
+.topo-tag{font:650 9.5px var(--sans);letter-spacing:.07em;text-transform:uppercase;padding:2px 6px;border-radius:4px}
+.topo-bar{height:6px;background:#0b1820;border-radius:3px;overflow:hidden}
+.topo-bar i{display:block;height:100%;background:#7f99a5;border-radius:3px}
+.topo-cell.none .topo-val{color:#ff8f78}.topo-cell.none .topo-tag{background:#43211c;color:#ffad9b}.topo-cell.none .topo-bar i{background:#ff7f6a}
+.topo-cell.weak .topo-val{color:#ffcf7a}.topo-cell.weak .topo-tag{background:#3d3218;color:#ffd98f}.topo-cell.weak .topo-bar i{background:#ffc861}
+.topo-cell.good .topo-val{color:#9be884}.topo-cell.good .topo-tag{background:#1d3a24;color:#aef095}.topo-cell.good .topo-bar i{background:#86d95f}
+.compare{padding:14px 16px 16px;border-top:1px solid #2a3e49}
+.compare-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:9px}
+.compare-head b{font-size:12px;color:#e2f0f3}.compare-head span{font-size:11px;color:#a3bac5}
+.cmp-row{display:grid;grid-template-columns:minmax(118px,1.1fr) minmax(104px,.9fr) minmax(0,2.2fr) 62px;gap:12px;align-items:center;width:100%;text-align:left;padding:8px 10px;border:1px solid transparent;border-radius:7px;background:transparent;color:#c7d8df;font:500 12px var(--sans);cursor:pointer}
+.cmp-row:hover{background:#172a33}
+.cmp-row.current{background:#173138;border-color:#3b7a74}
+.cmp-name small{display:block;font:400 10.5px var(--mono);color:#93abb7;margin-top:2px}
+.cmp-topo{font:400 11px var(--mono);color:#a9c0ca}
+.cmp-bar{height:10px;background:#0b1820;border-radius:5px;overflow:hidden}
+.cmp-bar i{display:block;height:100%;border-radius:5px;transition:width .25s ease}
+.cmp-bar i.good{background:#86d95f}.cmp-bar i.warn{background:#ffc861}.cmp-bar i.bad{background:#ff7f6a}.cmp-bar i.pending{background:#3a5260}
+.cmp-val{font:550 12.5px var(--mono);text-align:right;color:#e6f4f7}
+.extra-chart{padding:12px 16px 14px}
+.extra-chart canvas{display:block;width:100%}
+.extra-chart .chart-head{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.extra-chart .chart-head b{font-size:12px;color:#e2f0f3}.extra-chart .chart-head span{font-size:11px;color:#a3bac5}
+.takehome{margin-top:14px;padding:15px 18px;border-radius:10px;background:linear-gradient(100deg,#163c3b,#12262f 70%);border:1px solid #2f6662}
+.takehome .eyebrow{color:#7fe9d6}
+.takehome p{font-size:15px;line-height:1.55;color:#ecfaf7;margin:6px 0 0;font-weight:500;max-width:95ch}
+.lesson-settings .mini-tabs.preset-grid{display:grid;grid-auto-flow:row;grid-template-columns:1fr 1fr;gap:5px}
+.scene-key .dropkey:before{background:#62a8ff}
+.demo-visual #tryBox{margin:0 16px 16px;font-size:12px}
+
+.lesson-settings .small-actions{margin-top:4px}
+.cmp-row.cmp-header{cursor:default;padding-top:0;padding-bottom:2px;font:600 9.5px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:#8fb0bd}
+.cmp-row.cmp-header:hover{background:transparent}
+.lesson-settings .preset-grid button{padding:8px 6px;font-size:11px;text-align:center}
+.lesson-settings .slider-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.lesson-settings .section-label{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#8fb0bd;font-weight:650;margin:-4px 0 -6px}
+.demo-visual canvas.draggable{cursor:grab;touch-action:none}
+.demo-visual canvas.draggable:active{cursor:grabbing}
+@media(max-width:1100px){.topo-strip{grid-template-columns:1fr 1fr}.topo-intro{grid-column:1/-1}.lesson-settings .slider-pair{grid-column:auto}}
+@media(max-width:720px){.lesson-settings{grid-template-columns:1fr!important}.lesson-scenario{flex-direction:column;gap:4px}.lesson-scenario p{font-size:12.5px}.takehome p{font-size:13.5px}
+ .topo-strip{grid-template-columns:1fr}.cmp-row{grid-template-columns:1fr 70px;gap:4px 10px}.cmp-topo{grid-column:1/2;order:3}.cmp-bar{grid-column:1/-1;order:4}.cmp-val{order:2}}
+
+</style>
+</head>
+<body>
+
+<header>
+  <div class="mast">
+    <div>
+      <div class="tick">SURFACE-GUIDED RADIOTHERAPY &nbsp;·&nbsp; INTERACTIVE TEACHING LAB &nbsp;·&nbsp; v4.0</div>
+      <h1 style="margin-top:6px">What the surface can and cannot tell you</h1>
+    </div>
+    <p class="lede" style="margin:0">Explore how surface shape, ROI selection and surface change affect a reported shift. Start with one idea at a time, then investigate with the full simulator.</p>
+  </div>
+</header>
+
+<div class="wrap">
+<div class="modebar">
+  <div class="mode-switch" role="group" aria-label="Simulator mode"><button id="simpleModeBtn" aria-pressed="true" aria-controls="simpleMode">Simple · teaching cases</button><button id="advancedModeBtn" aria-pressed="false" aria-controls="advancedMode">Advanced · full simulator</button></div>
+  <span class="offline-note">Self-contained · works offline · all distances in mm</span>
+</div>
+<section id="simpleMode" aria-label="Simple teaching mode">
+  <div class="lesson-layout">
+    <aside><nav class="lesson-nav" aria-label="Teaching cases" id="lessonNav"><div class="lesson-nav-title">Choose an experiment</div></nav></aside>
+    <main class="lesson-main">
+      <div class="lesson-kicker"><span id="lessonNumber"></span><span class="pill" id="lessonTag"></span></div>
+      <h2 id="lessonTitle"></h2>
+      <div class="lesson-scenario"><span class="eyebrow">Scenario</span><p id="lessonScenario"></p></div>
+      <p class="lesson-question" id="lessonQuestion"></p>
+      <div class="experiment">
+        <div class="experiment-head"><strong id="sceneTitle">Reference and live surface</strong><div class="mini-tabs" role="group" aria-label="Visualisation view" id="viewChoices"></div></div>
+        <div class="demo-grid">
+          <div class="demo-visual"><canvas id="teachingCanvas" width="760" height="465" role="img" aria-label="Interactive illustration; numeric results and explanation below"></canvas><div class="scene-key" id="sceneKey"></div><div class="scene-caption" id="sceneCaption"></div><div class="try-box" id="tryBox"></div></div>
+          <div class="lesson-settings" id="lessonSettings"></div>
+        </div>
+        <div class="reading-grid" id="lessonReadings" role="status" aria-live="polite" aria-atomic="true"></div>
+        <div class="lesson-extra" id="lessonExtra"></div>
+      </div>
+      <div class="takehome"><div class="eyebrow">Take-home message</div><p id="takehomeText"></p></div>
+      <div class="interpret-grid"><div class="explain-card observation"><div class="eyebrow">What to notice right now</div><h3 id="observationTitle"></h3><p id="observationText"></p></div><div class="explain-card"><div class="eyebrow">In the clinic</div><h3 id="clinicalTitle"></h3><p id="clinicalText"></p></div></div>
+      <details class="lesson-detail"><summary>See the numbers and how this case is modelled</summary><div class="inner" id="lessonMethod"></div></details>
+      <div class="lesson-next"><button id="prevLesson">← Previous</button><button id="exploreAdvanced">Explore this case in Advanced</button><button id="nextLesson" class="next-case">Next case →</button></div>
+    </main>
+  </div>
+  <div class="limits-footer"><b>About this teaching model.</b> Synthetic anatomy, translations only. No rotations, camera occlusion, internal anatomy or vendor-specific registration are modelled. ROI examples illustrate mechanisms; they do not prescribe clinical ROIs or tolerances. Cases 1–3 use the simulator's point-to-plane fit (case 3 over 20 simulated days with a deliberately large daily change); case 4 uses a vertical-only fit to isolate ROI averaging; case 5 uses the analytical noise model. Numbers are illustrative and exaggerated to make each mechanism visible. Clinical context: <a href="https://doi.org/10.1002/mp.15532" target="_blank" rel="noopener noreferrer">AAPM TG-302 (2022), sections 3.4.2 and 4.2</a>.</div>
+</section>
+
+<section id="advancedMode" hidden aria-label="Advanced simulator">
+<div class="advanced-intro"><div><b>Advanced exploration</b><p>Build a surface, test a known shift, then simulate a course. Translation only; values are illustrative.</p></div><button class="btn ghost sm" id="backSimple">Back to teaching cases</button></div>
+<div class="console">
+
+  <!-- ================= LEFT RAIL ================= -->
+  <div class="rail">
+
+    <div class="card">
+      <div class="hd"><h2>Surface</h2><span class="note" id="roiNote">220 × 220 mm</span></div>
+      <div class="bd">
+        <div class="seg" role="group" aria-label="Surface type">
+          <button data-surf="flat" aria-pressed="true">Flat plate</button>
+          <button data-surf="cylinder" aria-pressed="false">Thorax</button>
+          <button data-surf="breast" aria-pressed="false">Breast</button>
+          <button data-surf="face" aria-pressed="false">Face</button>
+        </div>
+
+        <div class="fld" id="fldBase">
+          <label for="sBase"><span id="labBase">Gross shape</span><span class="v" id="vBase">0%</span></label>
+          <input type="range" id="sBase" min="0" max="100" value="0" step="1">
+          <div class="hint" id="hintBase">Tilts the plate. A tilted plane is still a plane.</div>
+        </div>
+
+        <div class="fld" id="fldFeat">
+          <label for="sFeat"><span id="labFeat">Feature prominence</span><span class="v" id="vFeat">0%</span></label>
+          <input type="range" id="sFeat" min="0" max="150" value="0" step="1">
+          <div class="hint" id="hintFeat">Nose, brow, cheeks, chin — or the breast mound.</div>
+        </div>
+
+        <div class="fld">
+          <label for="sRough">Anatomical texture (reproducible)<span class="v" id="vRough">0.0 mm</span></label>
+          <input type="range" id="sRough" min="0" max="60" value="0" step="1">
+          <div class="hint">Real, repeatable surface detail — present in <em>both</em> captures, so it carries registration information.</div>
+        </div>
+
+        <div class="fld">
+          <label for="sRoughSc">Texture length scale<span class="v" id="vRoughSc">30 mm</span></label>
+          <input type="range" id="sRoughSc" min="8" max="90" value="30" step="1">
+        </div>
+
+        <div class="fld">
+          <label for="sRoi">Region of interest<span class="v" id="vRoi">220 mm</span></label>
+          <input type="range" id="sRoi" min="60" max="260" value="220" step="5">
+          <div class="hint">Shrink the ROI onto a flat patch and the information vanishes even on a detailed patient.</div>
+        </div>
+
+        <div class="fld">
+          <label for="sCx">ROI centre, lateral<span class="v" id="vCx">0 mm</span></label>
+          <input type="range" id="sCx" min="-80" max="80" value="0" step="2">
+        </div>
+        <div class="fld">
+          <label for="sCy">ROI centre, longitudinal<span class="v" id="vCy">0 mm</span></label>
+          <input type="range" id="sCy" min="-80" max="80" value="0" step="2">
+          <div class="hint">Where you draw the ROI matters as much as which patient you drew it on.</div>
+        </div>
+
+        <details open>
+          <summary>Worked examples</summary>
+          <div class="inner presets" id="presets"></div>
+        </details>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="hd"><h2>Setup error over a course</h2><span class="note" id="fxNote">20 fx</span></div>
+      <div class="bd">
+        <div class="seg" role="group" aria-label="Error dimensionality" style="grid-template-columns:1fr 1fr 1fr 1fr">
+          <button data-dim="3d" aria-pressed="true">3D</button>
+          <button data-dim="x" aria-pressed="false">X only</button>
+          <button data-dim="y" aria-pressed="false">Y only</button>
+          <button data-dim="z" aria-pressed="false">Z only</button>
+        </div>
+
+        <div class="fld">
+          <label for="sSys">Systematic error Σ (per axis, 1 SD)<span class="v" id="vSys">2.0 mm</span></label>
+          <input type="range" id="sSys" min="0" max="80" value="20" step="1">
+          <div class="hint">Drawn once for the whole course, then repeated every fraction.</div>
+        </div>
+
+        <div class="fld">
+          <label for="sRnd">Random error σ (per axis, 1 SD)<span class="v" id="vRnd">2.0 mm</span></label>
+          <input type="range" id="sRnd" min="0" max="80" value="20" step="1">
+          <div class="hint">Redrawn independently every fraction.</div>
+        </div>
+
+        <div class="fld">
+          <label for="sFx">Fractions<span class="v" id="vFx">20</span></label>
+          <input type="range" id="sFx" min="1" max="35" value="20" step="1">
+        </div>
+
+        <div class="fld">
+          <label for="sDeform">Surface change between scans<span class="v off" id="vDeform">0.00 mm</span></label>
+          <input type="range" id="sDeform" min="0" max="500" value="0" step="1">
+          <div class="hint">Breathing, posture, swelling, calibration drift — anything that makes today's surface
+          different from the reference. Spatially correlated change can bias the fit rather than average down like independent noise. This control scales a bounded synthetic field; it is not an RMS value or a clinical reference range.</div>
+        </div>
+
+        <div class="fld">
+          <label for="sDefSc">Its spatial scale<span class="v" id="vDefSc">90 mm</span></label>
+          <input type="range" id="sDefSc" min="20" max="200" value="90" step="5">
+          <div class="hint">Short-wavelength change looks like noise and partly averages out. Long-wavelength
+          change looks like a translation, so the solver may absorb some of it into the reported shift. The mismatch can remain small despite that bias.</div>
+        </div>
+
+        <div class="fld">
+          <label for="sAction">Action level (3D vector)<span class="v" id="vAction">3.0 mm</span></label>
+          <input type="range" id="sAction" min="5" max="100" value="30" step="1">
+        </div>
+
+        <button class="btn" id="runBtn">Run the course</button>
+
+        <details>
+          <summary>Imaging &amp; solver</summary>
+          <div class="inner">
+            <div class="fld">
+              <label for="sNoise">Camera noise (per point, 1 SD)<span class="v" id="vNoise">0.30 mm</span></label>
+              <input type="range" id="sNoise" min="0" max="200" value="30" step="1">
+              <div class="hint">Independent every capture, so it averages down over many points — unlike anatomical texture, it carries no information.</div>
+            </div>
+            <div class="fld">
+              <label for="sPts">Surface points in ROI<span class="v" id="vPts">2500</span></label>
+              <input type="range" id="sPts" min="400" max="8000" value="2500" step="100">
+            </div>
+            <div class="fld">
+              <label for="sTol">Solver conditioning cut-off<span class="v" id="vTol">1e-4</span></label>
+              <input type="range" id="sTol" min="2" max="7" value="4" step="1">
+              <div class="hint">Eigenvalue ratio below which a direction is declared unsolvable and left uncorrected. This is a modelling choice, not a description of every commercial algorithm.</div>
+            </div>
+            <div class="fld">
+              <label for="sSeed">Random seed<span class="v" id="vSeed">1</span></label>
+              <div class="row2">
+                <input type="number" id="sSeed" value="1" min="0" step="1">
+                <button class="btn ghost sm" id="newSeed" style="width:100%">New seed</button>
+              </div>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MAIN ================= -->
+  <div>
+    <div id="errBox"></div>
+
+    <div class="stage">
+      <!-- 3D viewport -->
+      <div class="card">
+        <div class="vp-tabs" role="group" aria-label="Surface display">
+          <button data-view="shade" aria-pressed="true">Shaded</button>
+          <button data-view="slope" aria-pressed="false">Surface slope</button>
+          <button data-view="resid" aria-pressed="false">Remaining surface mismatch</button>
+        </div>
+        <div class="viewport"><canvas id="cv3d" width="760" height="470" aria-label="Three-dimensional view of the reference surface"></canvas></div>
+        <div class="legend">
+          <span id="lgLo">low</span><div class="ramp" id="ramp"></div><span id="lgHi">high</span>
+        </div>
+      </div>
+
+      <!-- readouts -->
+      <div style="display:flex;flex-direction:column;gap:18px">
+        <div class="card">
+          <div class="hd"><h2>What this surface constrains</h2><span class="note">rank <span id="rkTxt">1</span>/3</span></div>
+          <div class="bd">
+            <div class="bars" id="detBars"></div>
+            <p class="hint" style="margin:11px 0 0">
+              Bars show the RMS normal component along each axis. Numbers are a camera-noise-only 1 SD estimate where that axis is fully identifiable. “Coupled” means it cannot be independently separated from another axis. Rank counts independent translation directions, not steepness.
+            </p>
+            <div class="verdict" id="verdict"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="hd">
+            <h2>Cost landscape</h2>
+            <span class="note" id="landAx">
+              <span class="axkey" style="background:#ff6a52"></span>X
+              <span class="axkey" style="background:#2fd4c1;margin-left:8px"></span>Y
+              <span class="axkey" style="background:#56a2ff;margin-left:8px"></span>Z
+            </span>
+          </div>
+          <div class="bd" style="padding-top:9px">
+            <canvas id="cvLand" class="chart" width="660" height="230" aria-label="Registration cost as a function of applied shift"></canvas>
+            <p class="hint" style="margin:8px 0 0">
+              Mismatch between the two surfaces as one is slid along each axis. A flat trace means every position
+              fits equally well: the solver has no reason to prefer the right answer. A deep, narrow valley means
+              the shift is pinned down.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- single shift bench -->
+    <section class="blk">
+      <div class="blk-hd">
+        <h2>Single-shift bench</h2>
+        <span class="tick">move the patient by a known amount, see what the system reports</span>
+      </div>
+      <div class="card"><div class="bd">
+        <div class="grid2" style="gap:22px">
+          <div>
+            <div class="row3">
+              <div class="fld"><label for="bX">X lat<span class="v" id="vbX">3.0</span></label><input type="range" id="bX" min="-100" max="100" value="30" step="1"></div>
+              <div class="fld"><label for="bY">Y long<span class="v" id="vbY">0.0</span></label><input type="range" id="bY" min="-100" max="100" value="0" step="1"></div>
+              <div class="fld"><label for="bZ">Z vert<span class="v" id="vbZ">0.0</span></label><input type="range" id="bZ" min="-100" max="100" value="0" step="1"></div>
+            </div>
+            <div class="tblwrap" style="max-height:none">
+              <table id="benchTbl">
+                <thead><tr><th>mm</th><th>X lat</th><th>Y long</th><th>Z vert</th><th>3D</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <p class="hint" style="margin-top:9px">
+              Surface mismatch after registration (RMS) <span id="benchRms" style="font-family:var(--mono);color:var(--sig)">0.000 mm</span>
+              is a point-to-plane metric for this simulator. A low value can coexist with a missed shift. It is not a vendor accuracy readout. The colour map shows the smooth remaining mismatch, including simulated deformation but excluding per-point camera noise.
+            </p>
+          </div>
+          <div>
+            <canvas id="cvBench" class="chart" width="660" height="300" aria-label="True versus detected shift"></canvas>
+          </div>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- surface metrics -->
+    <section class="blk">
+      <div class="blk-hd">
+        <h2>Topography metrics</h2>
+        <span class="tick">descriptive height-field metrics; no ISO filtering or form removal</span>
+      </div>
+      <div class="card"><div class="bd" style="padding:0">
+        <div class="stat-grid" id="metricGrid"></div>
+      </div></div>
+    </section>
+
+    <!-- results -->
+    <section class="blk">
+      <div class="blk-hd">
+        <h2>Course results</h2>
+        <div style="display:flex;gap:7px">
+          <button class="btn ghost sm" id="csvBtn" disabled>Download CSV</button>
+        </div>
+      </div>
+
+      <div id="results" style="display:none">
+        <div class="card" style="margin-bottom:18px"><div class="bd" style="padding:0">
+          <div class="stat-grid" id="summaryGrid"></div>
+        </div></div>
+
+        <div class="card" style="margin-bottom:18px">
+          <div class="hd">
+            <h2>Setup error applied, and what the system saw</h2>
+            <span class="note">
+              <span class="axkey" style="background:#ff6a52"></span>X
+              <span class="axkey" style="background:#2fd4c1;margin-left:9px"></span>Y
+              <span class="axkey" style="background:#56a2ff;margin-left:9px"></span>Z
+            </span>
+          </div>
+          <div class="bd">
+            <canvas id="cvApplied" class="chart" width="1120" height="290"></canvas>
+            <p class="hint" style="margin:9px 0 0">
+              Solid line with filled dots is the shift actually given to the patient that day. Hollow rings are
+              what the registration reported. Where a ring sits away from its dot, that difference is left
+              uncorrected. The faint dashed line on each axis is the systematic component, repeated every fraction.
+            </p>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:18px">
+          <div class="hd"><h2>Residual error left on the patient, fraction by fraction</h2>
+            <span class="note">
+              <span class="axkey" style="background:#ff6a52"></span>X
+              <span class="axkey" style="background:#2fd4c1;margin-left:9px"></span>Y
+              <span class="axkey" style="background:#56a2ff;margin-left:9px"></span>Z
+            </span>
+          </div>
+          <div class="bd"><canvas id="cvTime" class="chart" width="1120" height="290"></canvas></div>
+        </div>
+
+        <div class="grid2" style="margin-bottom:18px">
+          <div class="card">
+            <div class="hd"><h2>3D residual per fraction</h2><span class="note" id="magNote"></span></div>
+            <div class="bd"><canvas id="cvMag" class="chart" width="660" height="250"></canvas></div>
+          </div>
+          <div class="card">
+            <div class="hd"><h2>Distribution over the course</h2><span class="note">residual, mm</span></div>
+            <div class="bd"><canvas id="cvHist" class="chart" width="660" height="250"></canvas></div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:18px">
+          <div class="hd"><h2>Detected against true</h2><span class="note">a horizontal cloud means the system is blind on that axis</span></div>
+          <div class="bd"><canvas id="cvScat" class="chart" width="1120" height="330"></canvas></div>
+        </div>
+
+        <div class="card" style="margin-bottom:18px">
+          <div class="hd"><h2>Per-axis summary</h2><span class="note">one simulated course; not population margin estimates</span></div>
+          <div class="bd" style="padding:0">
+            <div class="tblwrap" style="max-height:none;border:none;border-radius:0">
+              <table id="axisTbl"><thead></thead><tbody></tbody></table>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="hd"><h2>Fraction log</h2><span class="note">true → detected → residual</span></div>
+          <div class="bd" style="padding:0">
+            <div class="tblwrap" style="border:none;border-radius:0">
+              <table id="fxTbl"><thead></thead><tbody></tbody></table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="noResults"><div class="empty">Set up a surface and a course, then run it. Results appear here.</div></div>
+    </section>
+
+    <!-- teaching notes -->
+    <section class="blk">
+      <div class="blk-hd"><h2>How the simulation works</h2></div>
+      <div class="card"><div class="bd">
+        <div class="grid2" style="gap:26px">
+          <div class="teach">
+            <p><b>The surfaces.</b> Each surface is a height field z = h(x, y). The reference is sampled on a
+            regular grid with surface normals from central differences. The live capture is sampled independently
+            at jittered positions from the same height field, so the two point sets never share vertices — as in
+            a real second capture.</p>
+            <p><b>The registration.</b> Point-to-plane ICP solving for translation only, with nearest-neighbour
+            correspondences, rejection of matches on the ROI boundary, and trimming of the worst 10% of matches.
+            It stops when the step falls below 10 nm, or when the last six iterates sit within 0.25 mm of each other (with noise, nearest-neighbour ICP commonly settles into a small cycle; the cycle average is used). A run that walks out of the capture range or loses its overlap is flagged and applies no correction.</p>
+            <p><b>Why flat fails.</b> The normal equations are A·t = b with A = Σ nnᵀ over the matched points.
+            For a plane every normal is identical, so A has rank 1: only the direction along the normal is
+            solvable. The two in-plane directions have zero eigenvalue and the solver returns nothing for them.
+            A tilted plate is no better — it just spreads the one solvable direction across all three axes,
+            which shows up as cross-talk between them.</p>
+          </div>
+          <div class="teach">
+            <p><b>When the solve runs away.</b> A direction that is only just above the conditioning cut-off
+            can be less stable than one clearly below it: the solver trusts it and divides by an almost-zero
+            eigenvalue, so any perturbation is amplified into a large reported shift. Fractions where the
+            accumulated translation leaves any plausible capture range are stopped and marked as a registration
+            failure in the log. If you see those, look at the condition number — you are sitting on the cliff
+            edge between solvable and blind.</p>
+            <p><b>Degenerate directions.</b> The solver uses a truncated pseudo-inverse: any eigen-direction whose
+            eigenvalue falls below the conditioning cut-off relative to the largest is left uncorrected rather than
+            being amplified into noise. This is a choice in this teaching model; vendor algorithms can behave differently.</p>
+            <p><b>Predicted uncertainty.</b> With camera noise σ<sub>n</sub> along the viewing axis, the estimator
+            covariance is σ<sub>n</sub>²·A⁺A<sub>z</sub>A⁺ where A<sub>z</sub> = Σ n<sub>z</sub>²nnᵀ. The predicted
+            1σ figures in the panel above are an approximate, local noise-only estimate from that expression, using an assumed effective point count of 75% of the requested samples. They exclude deformation, correspondence error and lost directions.</p>
+            <p><b>Two kinds of averaging.</b> Independent, zero-mean noise decreases approximately as 1/√N when estimating a shared shift. A local anatomical change can also be diluted by unchanged surface within a larger ROI. These are different effects. Correlated change may produce a persistent bias; a small ROI may also lose useful landmarks.</p>
+            <p><b>What is left out.</b> Rotations, real camera geometry and occlusion, and everything clinical:
+            couch mechanics, immobilisation, intrafraction drift. Only height geometry is used, without colour-texture tracking or an internal target. Treat the qualitative behaviour, not the absolute magnitude, as the lesson.</p>
+          </div>
+        </div>
+      </div></div>
+    </section>
+
+  </div>
+</div>
+</section>
+</div>
+
+<script>
+/* ============================================================================
+   SGRT topography & registration simulator
+   Units: millimetres. Axes: x lateral, y longitudinal (sup/inf), z vertical.
+   ============================================================================ */
+(function () {
+'use strict';
+
+/* ===== CORE-BEGIN ===== (verified independently in Node) */
+
+function mulberry32(a) {
+  a = a >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    var t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function makeGauss(rng) {
+  var spare = null;
+  return function () {
+    if (spare !== null) { var s0 = spare; spare = null; return s0; }
+    var u = 0, v = 0, s = 0;
+    do { u = rng() * 2 - 1; v = rng() * 2 - 1; s = u * u + v * v; } while (s === 0 || s >= 1);
+    var m = Math.sqrt(-2 * Math.log(s) / s);
+    spare = v * m;
+    return u * m;
+  };
+}
+function makeNoise(seed) {
+  var R = mulberry32(seed), P = new Uint8Array(512), perm = new Uint8Array(256), i, j, t;
+  for (i = 0; i < 256; i++) perm[i] = i;
+  for (i = 255; i > 0; i--) { j = Math.floor(R() * (i + 1)); t = perm[i]; perm[i] = perm[j]; perm[j] = t; }
+  for (i = 0; i < 512; i++) P[i] = perm[i & 255];
+  var G = new Float64Array(256);
+  for (i = 0; i < 256; i++) G[i] = R() * 2 - 1;
+  function at(a, b) { return G[P[((a & 255) + (P[b & 255] & 255)) & 511] & 255]; }
+  function fade(x) { return x * x * x * (x * (x * 6 - 15) + 10); }
+  function value2(x, y) {
+    var xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+    var u = fade(xf), v = fade(yf);
+    var a = at(xi, yi), b = at(xi + 1, yi), c = at(xi, yi + 1), d = at(xi + 1, yi + 1);
+    return (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v;
+  }
+  return function (x, y, scaleMm) {
+    var f = 1 / Math.max(1e-6, scaleMm), sum = 0, amp = 1, norm = 0, fr = f, o;
+    for (o = 0; o < 4; o++) { sum += amp * value2(x * fr, y * fr); norm += amp; amp *= 0.5; fr *= 2.07; }
+    return sum / norm;
+  };
+}
+function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+function gauss2(x, y, x0, y0, sx, sy) { var a = (x - x0) / sx, b = (y - y0) / sy; return Math.exp(-0.5 * (a * a + b * b)); }
+
+function hFlat(x, y, base) { return x * Math.tan(base * 20 * Math.PI / 180); }
+/* A flat plane rising towards the head (+y), like an inclined breast board. base 1 = 20 degrees. */
+function hIncline(x, y, base) { return y * Math.tan(base * 20 * Math.PI / 180); }
+function hCylinder(x, y, base) { var r = clamp(x / 105, -1, 1); return 45 * base * (1 - r * r); }
+function hBreast(x, y, base, feat) {
+  return hCylinder(x, y, base)
+    + feat * 46 * gauss2(x, y, 22, 0, 40, 44)
+    - feat * 7 * gauss2(x, y, 22, -56, 42, 9)
+    + feat * 5 * gauss2(x, y, 22, 2, 9, 9);
+}
+function hFace(x, y, base, feat) {
+  var a = 96, b = 122;
+  var q = 1 - (x / a) * (x / a) - (y / b) * (y / b);
+  var head = 58 * base * Math.sqrt(Math.max(0, q));
+  var f = 0;
+  f += 26 * gauss2(x, y, 0, -2, 9.5, 24);
+  f += 7 * gauss2(x, y, -11, -17, 6, 6);
+  f += 7 * gauss2(x, y, 11, -17, 6, 6);
+  f += 7 * gauss2(x, y, -29, 38, 21, 8);
+  f += 7 * gauss2(x, y, 29, 38, 21, 8);
+  f -= 9 * gauss2(x, y, -30, 24, 15, 10);
+  f -= 9 * gauss2(x, y, 30, 24, 15, 10);
+  f += 8 * gauss2(x, y, -44, -6, 20, 26);
+  f += 8 * gauss2(x, y, 44, -6, 20, 26);
+  f += 5 * gauss2(x, y, 0, -40, 21, 8);
+  f -= 4 * gauss2(x, y, 0, -50, 24, 6);
+  f += 8 * gauss2(x, y, 0, -63, 19, 13);
+  return head + feat * f;
+}
+var SURFACES = {
+  flat:     { name: 'Flat plate',    h: hFlat },
+  incline:  { name: 'Inclined plate', h: hIncline },
+  cylinder: { name: 'Thorax',        h: hCylinder },
+  breast:   { name: 'Breast',        h: hBreast },
+  face:     { name: 'Face',          h: hFace }
+};
+
+function makeHeight(cfg) {
+  var fn = (SURFACES[cfg.type] || SURFACES.flat).h;
+  var base = cfg.base, feat = cfg.feat;
+  if (!(cfg.roughAmp > 0)) return function (x, y) { return fn(x, y, base, feat); };
+  var noise = makeNoise(cfg.roughSeed >>> 0), amp = cfg.roughAmp, sc = cfg.roughScale;
+  return function (x, y) { return fn(x, y, base, feat) + amp * noise(x, y, sc); };
+}
+
+function buildReference(cfg) {
+  var H = makeHeight(cfg), N = cfg.grid, Lx = cfg.Lx, Ly = cfg.Ly;
+  var cx = cfg.cx || 0, cy = cfg.cy || 0;
+  var dx = Lx / (N - 1), dy = Ly / (N - 1), x0 = cx - Lx / 2, y0 = cy - Ly / 2;
+  var z = new Float64Array(N * N), i, j, k;
+  for (j = 0; j < N; j++) for (i = 0; i < N; i++) z[j * N + i] = H(x0 + i * dx, y0 + j * dy);
+  var nx = new Float64Array(N * N), ny = new Float64Array(N * N), nz = new Float64Array(N * N);
+  var hxa = new Float64Array(N * N), hya = new Float64Array(N * N);
+  for (j = 0; j < N; j++) for (i = 0; i < N; i++) {
+    var im = i > 0 ? i - 1 : 0, ip = i < N - 1 ? i + 1 : N - 1;
+    var jm = j > 0 ? j - 1 : 0, jp = j < N - 1 ? j + 1 : N - 1;
+    var hx = (z[j * N + ip] - z[j * N + im]) / ((ip - im) * dx);
+    var hy = (z[jp * N + i] - z[jm * N + i]) / ((jp - jm) * dy);
+    var len = Math.sqrt(hx * hx + hy * hy + 1);
+    k = j * N + i;
+    nx[k] = -hx / len; ny[k] = -hy / len; nz[k] = 1 / len;
+    hxa[k] = hx; hya[k] = hy;
+  }
+  return { cfg: cfg, H: H, N: N, Lx: Lx, Ly: Ly, cx: cx, cy: cy, dx: dx, dy: dy, x0: x0, y0: y0,
+           z: z, nx: nx, ny: ny, nz: nz, hx: hxa, hy: hya };
+}
+
+function eigSym3(Ain) {
+  var A = [Ain[0].slice(), Ain[1].slice(), Ain[2].slice()];
+  var V = [[1,0,0],[0,1,0],[0,0,1]], sweep, p, q, k;
+  for (sweep = 0; sweep < 60; sweep++) {
+    var off = 0;
+    for (p = 0; p < 3; p++) for (q = p + 1; q < 3; q++) off += A[p][q] * A[p][q];
+    if (!(off > 1e-30)) break;
+    for (p = 0; p < 3; p++) for (q = p + 1; q < 3; q++) {
+      if (Math.abs(A[p][q]) < 1e-300) continue;
+      var theta = (A[q][q] - A[p][p]) / (2 * A[p][q]);
+      var sg = theta < 0 ? -1 : 1;
+      var t = sg / (Math.abs(theta) + Math.sqrt(theta * theta + 1));
+      var c = 1 / Math.sqrt(t * t + 1), s = t * c;
+      for (k = 0; k < 3; k++) { var akp = A[k][p], akq = A[k][q]; A[k][p] = c*akp - s*akq; A[k][q] = s*akp + c*akq; }
+      for (k = 0; k < 3; k++) { var apk = A[p][k], aqk = A[q][k]; A[p][k] = c*apk - s*aqk; A[q][k] = s*apk + c*aqk; }
+      for (k = 0; k < 3; k++) { var vkp = V[k][p], vkq = V[k][q]; V[k][p] = c*vkp - s*vkq; V[k][q] = s*vkp + c*vkq; }
+    }
+  }
+  var vals = [A[0][0], A[1][1], A[2][2]];
+  var vecs = [[V[0][0],V[1][0],V[2][0]],[V[0][1],V[1][1],V[2][1]],[V[0][2],V[1][2],V[2][2]]];
+  var idx = [0,1,2].sort(function (a, b) { return vals[b] - vals[a]; });
+  return { values: idx.map(function (i) { return vals[i]; }), vectors: idx.map(function (i) { return vecs[i]; }) };
+}
+function pinvSym3(A, tol) {
+  var e = eigSym3(A), lmax = Math.max(e.values[0], 1e-300);
+  var out = [[0,0,0],[0,0,0],[0,0,0]], kept = [], k, a, b;
+  for (k = 0; k < 3; k++) {
+    var lam = e.values[k];
+    if (!(lam > 0) || lam / lmax <= tol) { kept.push(0); continue; }
+    kept.push(1);
+    var v = e.vectors[k], inv = 1 / lam;
+    for (a = 0; a < 3; a++) for (b = 0; b < 3; b++) out[a][b] += inv * v[a] * v[b];
+  }
+  return { M: out, eig: e, kept: kept, rank: kept[0] + kept[1] + kept[2] };
+}
+function mul3(A, B) {
+  var C = [[0,0,0],[0,0,0],[0,0,0]], i, j, k, s;
+  for (i = 0; i < 3; i++) for (j = 0; j < 3; j++) { s = 0; for (k = 0; k < 3; k++) s += A[i][k] * B[k][j]; C[i][j] = s; }
+  return C;
+}
+
+function sampleLive(ref, nPts, rng) {
+  var margin = 3 * Math.max(ref.dx, ref.dy);
+  var w = Math.max(ref.dx * 4, ref.Lx - 2 * margin), h = Math.max(ref.dy * 4, ref.Ly - 2 * margin);
+  var n = Math.max(64, nPts | 0);
+  var side = Math.max(4, Math.round(Math.sqrt(n * w / h)));
+  var rows = Math.max(4, Math.round(n / side));
+  var sx = w / side, sy = h / rows;
+  var ox = ref.x0 + ref.Lx / 2, oy = ref.y0 + ref.Ly / 2;
+  var out = new Float64Array(side * rows * 3), p = 0, i, j, x, y;
+  for (j = 0; j < rows; j++) for (i = 0; i < side; i++) {
+    x = ox - w / 2 + (i + 0.5 + (rng() - 0.5) * 0.9) * sx;
+    y = oy - h / 2 + (j + 0.5 + (rng() - 0.5) * 0.9) * sy;
+    out[p++] = x; out[p++] = y; out[p++] = ref.H(x, y);
+  }
+  return out;
+}
+
+function registerICP(ref, live, opts) {
+  var o = opts || {};
+  var iters = o.iters || 60, win = o.win || 3, edge = o.edgeCells == null ? 2 : o.edgeCells;
+  var trim = o.trim == null ? 0.9 : o.trim, tol = o.tol == null ? 1e-4 : o.tol;
+  var dTol = o.dTol == null ? 1e-5 : o.dTol, maxStep = o.maxStep == null ? 60 : o.maxStep;
+  var maxTotal = o.maxTotal == null ? 100 : o.maxTotal;
+  var N = ref.N, dx = ref.dx, dy = ref.dy, x0 = ref.x0, y0 = ref.y0;
+  var nP = (live.length / 3) | 0;
+  var cur = Float64Array.from(live);
+  var t = [0, 0, 0];
+  var A = [[0,0,0],[0,0,0],[0,0,0]], b = [0,0,0];
+  var usedCount = 0, rms = 0, iterUsed = 0, converged = false, diverged = false, settled = false;
+  var d2 = new Float64Array(nP), ci = new Int32Array(nP);
+  // History of iterates. With noisy data and discrete nearest-vertex correspondences ICP often
+  // settles into a small cycle (the correspondence set flips between a few nearby states) and
+  // never meets a nanometre step test. A tight cycle is a converged answer, not a failure.
+  var cut = Infinity, histT = [], HW = 6, settleTol = o.settleTol == null ? 0.25 : o.settleTol;
+  var it, p, ii, jj;
+
+  for (it = 0; it < iters; it++) {
+    var m = 0;
+    for (p = 0; p < nP; p++) {
+      var px = cur[3*p], py = cur[3*p+1], pz = cur[3*p+2];
+      var i0 = Math.round((px - x0) / dx), j0 = Math.round((py - y0) / dy);
+      var best = Infinity, bi = -1;
+      for (jj = j0 - win; jj <= j0 + win; jj++) {
+        if (jj < 0 || jj >= N) continue;
+        var rowBase = jj * N, yv = y0 + jj * dy - py;
+        for (ii = i0 - win; ii <= i0 + win; ii++) {
+          if (ii < 0 || ii >= N) continue;
+          var kk = rowBase + ii;
+          var ex = x0 + ii * dx - px, ez = ref.z[kk] - pz;
+          var dd = ex * ex + yv * yv + ez * ez;
+          if (dd < best) { best = dd; bi = kk; }
+        }
+      }
+      if (bi < 0) { ci[p] = -1; continue; }
+      var bii = bi % N, bjj = (bi / N) | 0;
+      if (bii < edge || bii >= N - edge || bjj < edge || bjj >= N - edge) { ci[p] = -1; continue; }
+      ci[p] = bi; d2[p] = best; m++;
+    }
+    if (m < 12) break;
+
+    cut = Infinity;
+    if (trim < 1) {
+      var arr = new Float64Array(m), c2 = 0;
+      for (p = 0; p < nP; p++) if (ci[p] >= 0) arr[c2++] = d2[p];
+      arr.sort();
+      cut = arr[Math.min(m - 1, Math.max(0, Math.floor(m * trim) - 1))];
+    }
+
+    A = [[0,0,0],[0,0,0],[0,0,0]]; b = [0,0,0];
+    var se = 0, used = 0;
+    for (p = 0; p < nP; p++) {
+      var k = ci[p]; if (k < 0 || d2[p] > cut) continue;
+      var nxk = ref.nx[k], nyk = ref.ny[k], nzk = ref.nz[k];
+      var ax = cur[3*p]     - (x0 + (k % N) * dx);
+      var ay = cur[3*p + 1] - (y0 + (((k / N) | 0)) * dy);
+      var az = cur[3*p + 2] - ref.z[k];
+      var r = ax * nxk + ay * nyk + az * nzk;
+      A[0][0] += nxk*nxk; A[0][1] += nxk*nyk; A[0][2] += nxk*nzk;
+      A[1][1] += nyk*nyk; A[1][2] += nyk*nzk; A[2][2] += nzk*nzk;
+      b[0] -= r * nxk; b[1] -= r * nyk; b[2] -= r * nzk;
+      se += r * r; used++;
+    }
+    A[1][0] = A[0][1]; A[2][0] = A[0][2]; A[2][1] = A[1][2];
+    if (used < 12) break;
+    usedCount = used; rms = Math.sqrt(se / used); iterUsed = it + 1;
+
+    var pi = pinvSym3(A, tol);
+    var s = [
+      pi.M[0][0]*b[0] + pi.M[0][1]*b[1] + pi.M[0][2]*b[2],
+      pi.M[1][0]*b[0] + pi.M[1][1]*b[1] + pi.M[1][2]*b[2],
+      pi.M[2][0]*b[0] + pi.M[2][1]*b[1] + pi.M[2][2]*b[2]
+    ];
+    if (!isFinite(s[0]) || !isFinite(s[1]) || !isFinite(s[2])) break;
+    var mag = Math.sqrt(s[0]*s[0] + s[1]*s[1] + s[2]*s[2]);
+    if (mag > maxStep) { var f = maxStep / mag; s[0] *= f; s[1] *= f; s[2] *= f; }
+    for (p = 0; p < nP; p++) { cur[3*p] += s[0]; cur[3*p+1] += s[1]; cur[3*p+2] += s[2]; }
+    t[0] += s[0]; t[1] += s[1]; t[2] += s[2];
+    var tot = Math.sqrt(t[0]*t[0] + t[1]*t[1] + t[2]*t[2]);
+    if (tot > maxTotal) {
+      // the solve has walked outside any plausible capture range: an ill-conditioned
+      // direction is being driven by whatever perturbation is present. Stop and flag it.
+      var sf = maxTotal / tot; t[0] *= sf; t[1] *= sf; t[2] *= sf;
+      diverged = true; break;
+    }
+    if (Math.abs(s[0]) + Math.abs(s[1]) + Math.abs(s[2]) < dTol) { converged = true; break; }
+    histT.push([t[0], t[1], t[2]]);
+    if (histT.length >= HW && it >= 8) {
+      var w0 = histT.length - HW, mt = [0, 0, 0], q, spread = 0;
+      for (q = w0; q < histT.length; q++) { mt[0] += histT[q][0] / HW; mt[1] += histT[q][1] / HW; mt[2] += histT[q][2] / HW; }
+      for (q = w0; q < histT.length; q++)
+        spread = Math.max(spread, Math.hypot(histT[q][0] - mt[0], histT[q][1] - mt[1], histT[q][2] - mt[2]));
+      if (spread < settleTol) { t = mt; converged = true; settled = true; break; }
+    }
+  }
+  var pf = pinvSym3(A, tol);
+  // Only a solve that walked out of range or lost its overlap is a failure. One that reached the
+  // iteration limit without settling is accepted but labelled, since its answer is still the best
+  // available fit.
+  var failed = diverged || usedCount < 12;
+  var status = diverged ? 'Out of capture range' : usedCount < 12 ? 'Insufficient overlap'
+             : !converged ? 'Iteration limit (accepted)' : settled ? 'Converged (settled)' : 'Converged';
+  // Refresh RMS at the accepted transform using the final correspondence set.
+  // Failed solves apply no correction and retain their status in the bench/course.
+  if (failed) t = [0,0,0];
+  var finalSE = 0, finalN = 0;
+  for (p=0; p<nP; p++) {
+    var fk=ci[p]; if(fk<0 || d2[p]>cut) continue;
+    var fr=(live[3*p]+t[0]-(x0+(fk%N)*dx))*ref.nx[fk]
+      +(live[3*p+1]+t[1]-(y0+Math.floor(fk/N)*dy))*ref.ny[fk]
+      +(live[3*p+2]+t[2]-ref.z[fk])*ref.nz[fk];
+    finalSE+=fr*fr; finalN++;
+  }
+  rms=!failed && finalN ? Math.sqrt(finalSE/finalN) : NaN;
+  return { failed: failed, status: status, detected: [-t[0], -t[1], -t[2]], A: A, rank: pf.rank, eig: pf.eig,
+           rms: rms, used: usedCount, iters: iterUsed, converged: converged, settled: settled, diverged: diverged };
+}
+
+/* Normal-covariance conditioning + predicted estimator covariance.
+   Noise is applied along z (camera views along z), so Cov(b) = sN^2 * Az. */
+function conditioning(ref, edgeCells) {
+  var N = ref.N, ec = edgeCells == null ? 2 : edgeCells;
+  var A = [[0,0,0],[0,0,0],[0,0,0]], Az = [[0,0,0],[0,0,0],[0,0,0]], cnt = 0, i, j;
+  for (j = ec; j < N - ec; j++) for (i = ec; i < N - ec; i++) {
+    var k = j * N + i, a = ref.nx[k], b = ref.ny[k], c = ref.nz[k], w = c * c;
+    A[0][0]+=a*a; A[0][1]+=a*b; A[0][2]+=a*c; A[1][1]+=b*b; A[1][2]+=b*c; A[2][2]+=c*c;
+    Az[0][0]+=w*a*a; Az[0][1]+=w*a*b; Az[0][2]+=w*a*c; Az[1][1]+=w*b*b; Az[1][2]+=w*b*c; Az[2][2]+=w*c*c;
+    cnt++;
+  }
+  if (cnt < 1) cnt = 1;
+  A[1][0]=A[0][1]; A[2][0]=A[0][2]; A[2][1]=A[1][2];
+  Az[1][0]=Az[0][1]; Az[2][0]=Az[0][2]; Az[2][1]=Az[1][2];
+  var Am = [[0,0,0],[0,0,0],[0,0,0]], Azm = [[0,0,0],[0,0,0],[0,0,0]];
+  for (i = 0; i < 3; i++) for (j = 0; j < 3; j++) { Am[i][j] = A[i][j] / cnt; Azm[i][j] = Az[i][j] / cnt; }
+  return { A: Am, Az: Azm, count: cnt };
+}
+/* Approximate effective sample fraction for the illustrative local noise estimate. */
+var POINT_EFFICIENCY = 0.75;
+function predictSigma(cond, sN, nPts, tol) {
+  var n = Math.max(1, nPts * POINT_EFFICIENCY);
+  var pi = pinvSym3(cond.A, tol);
+  var C = mul3(mul3(pi.M, cond.Az), pi.M);
+  var out = { rank: pi.rank, eig: pi.eig, sigma: [0,0,0], solvable: [pi.kept[0], pi.kept[1], pi.kept[2]] };
+  for (var i = 0; i < 3; i++) {
+    var v = C[i][i] * sN * sN / n;
+    out.sigma[i] = v > 0 ? Math.sqrt(v) : 0;
+  }
+  // solvability per world axis: fraction of unit axis vector inside the solvable subspace
+  var keepDir = [[0,0,0],[0,0,0],[0,0,0]], a, b2, k;
+  for (k = 0; k < 3; k++) if (pi.kept[k]) {
+    var vv = pi.eig.vectors[k];
+    for (a = 0; a < 3; a++) for (b2 = 0; b2 < 3; b2++) keepDir[a][b2] += vv[a] * vv[b2];
+  }
+  out.axisSolvable = [keepDir[0][0], keepDir[1][1], keepDir[2][2]];
+  return out;
+}
+
+/* Cost landscape: RMS point-to-plane mismatch when the live surface is slid by d along one axis. */
+function costLandscape(ref, axis, dMax, nSteps, nPts) {
+  var rng = mulberry32(99), pts = sampleLive(ref, nPts || 700, rng);
+  var nP = (pts.length / 3) | 0, N = ref.N, dx = ref.dx, dy = ref.dy, x0 = ref.x0, y0 = ref.y0;
+  var win = 4, out = [], s, p, ii, jj;
+  for (s = 0; s < nSteps; s++) {
+    var d = -dMax + 2 * dMax * s / (nSteps - 1);
+    var ox = axis === 0 ? d : 0, oy = axis === 1 ? d : 0, oz = axis === 2 ? d : 0;
+    var se = 0, cnt = 0;
+    for (p = 0; p < nP; p++) {
+      var px = pts[3*p] + ox, py = pts[3*p+1] + oy, pz = pts[3*p+2] + oz;
+      var i0 = Math.round((px - x0) / dx), j0 = Math.round((py - y0) / dy);
+      var best = Infinity, bi = -1;
+      for (jj = j0 - win; jj <= j0 + win; jj++) {
+        if (jj < 2 || jj >= N - 2) continue;
+        var yv = y0 + jj * dy - py, rb = jj * N;
+        for (ii = i0 - win; ii <= i0 + win; ii++) {
+          if (ii < 2 || ii >= N - 2) continue;
+          var kk = rb + ii, ex = x0 + ii * dx - px, ez = ref.z[kk] - pz;
+          var dd = ex*ex + yv*yv + ez*ez;
+          if (dd < best) { best = dd; bi = kk; }
+        }
+      }
+      if (bi < 0) continue;
+      var r = (px - (x0 + (bi % N) * dx)) * ref.nx[bi]
+            + (py - (y0 + (((bi / N) | 0)) * dy)) * ref.ny[bi]
+            + (pz - ref.z[bi]) * ref.nz[bi];
+      se += r * r; cnt++;
+    }
+    out.push({ d: d, rms: cnt ? Math.sqrt(se / cnt) : NaN });
+  }
+  return out;
+}
+
+/* Areal texture parameters (ISO 25178 family) — extensible for v2. */
+function surfaceMetrics(ref) {
+  var N = ref.N, ec = 1, n = 0, i, j, k;
+  var sum = 0, mn = Infinity, mx = -Infinity;
+  for (j = ec; j < N - ec; j++) for (i = ec; i < N - ec; i++) {
+    var v = ref.z[j * N + i];
+    sum += v; if (v < mn) mn = v; if (v > mx) mx = v; n++;
+  }
+  if (!n) return null;
+  var mean = sum / n, s2 = 0, s3 = 0, s4 = 0, sdq = 0, sdr = 0, sa = 0;
+  for (j = ec; j < N - ec; j++) for (i = ec; i < N - ec; i++) {
+    k = j * N + i;
+    var d = ref.z[k] - mean;
+    s2 += d * d; s3 += d * d * d; s4 += d * d * d * d; sa += Math.abs(d);
+    var g = ref.hx[k] * ref.hx[k] + ref.hy[k] * ref.hy[k];
+    sdq += g; sdr += Math.sqrt(1 + g);
+  }
+  var Sq = Math.sqrt(s2 / n);
+  return {
+    Sa: sa / n,
+    Sq: Sq,
+    Sz: mx - mn,
+    Ssk: Sq > 1e-9 ? (s3 / n) / (Sq * Sq * Sq) : 0,
+    Sku: Sq > 1e-9 ? (s4 / n) / (Sq * Sq * Sq * Sq) : 0,
+    Sdq: Math.sqrt(sdq / n),
+    Sdr: (sdr / n - 1) * 100
+  };
+}
+
+/* ===== CORE-END ===== */
+
+/* ---------------------------------------------------------------- helpers */
+var $ = function (s) { return document.querySelector(s); };
+var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
+function fmt(v, d) {
+  if (v === null || v === undefined || !isFinite(v)) return '—';
+  var s = v.toFixed(d === undefined ? 2 : d);
+  return s === '-0.00' || s === '-0.000' || s === '-0.0' ? s.slice(1) : s;
+}
+function sd(a) {
+  if (a.length < 2) return 0;
+  var m = 0, i; for (i = 0; i < a.length; i++) m += a[i]; m /= a.length;
+  var s = 0; for (i = 0; i < a.length; i++) s += (a[i] - m) * (a[i] - m);
+  return Math.sqrt(s / (a.length - 1));
+}
+function mean(a) { if (!a.length) return 0; var s = 0; for (var i = 0; i < a.length; i++) s += a[i]; return s / a.length; }
+function pct(a, q) {
+  if (!a.length) return 0;
+  var b = a.slice().sort(function (x, y) { return x - y; });
+  var idx = clamp((b.length - 1) * q, 0, b.length - 1);
+  var lo = Math.floor(idx), hi = Math.ceil(idx);
+  return b[lo] + (b[hi] - b[lo]) * (idx - lo);
+}
+function lsSlope(x, y) {
+  var mx = mean(x), my = mean(y), sxy = 0, sxx = 0, i;
+  for (i = 0; i < x.length; i++) { sxy += (x[i] - mx) * (y[i] - my); sxx += (x[i] - mx) * (x[i] - mx); }
+  return sxx > 1e-12 ? sxy / sxx : NaN;
+}
+function lerpHex(c1, c2, t) {
+  var a = [parseInt(c1.slice(1,3),16), parseInt(c1.slice(3,5),16), parseInt(c1.slice(5,7),16)];
+  var b = [parseInt(c2.slice(1,3),16), parseInt(c2.slice(3,5),16), parseInt(c2.slice(5,7),16)];
+  return 'rgb(' + Math.round(a[0]+(b[0]-a[0])*t) + ',' + Math.round(a[1]+(b[1]-a[1])*t) + ',' + Math.round(a[2]+(b[2]-a[2])*t) + ')';
+}
+var HEIGHT_RAMP = ['#16233a','#1d4a58','#2f7d76','#69ae86','#c8c391','#f0e2c8'];
+function rampColor(t) {
+  t = clamp(t, 0, 1) * (HEIGHT_RAMP.length - 1);
+  var i = Math.min(HEIGHT_RAMP.length - 2, Math.floor(t));
+  return lerpHex(HEIGHT_RAMP[i], HEIGHT_RAMP[i + 1], t - i);
+}
+/* clinical signed-distance colourwash: blue (toward) – green (on) – red (away) */
+function washColor(v, scale) {
+  var t = clamp(v / scale, -1, 1);
+  if (t < 0) return lerpHex('#3d9c62', '#2f6fe0', Math.min(1, -t));
+  return lerpHex('#3d9c62', '#e04a30', Math.min(1, t));
+}
+function fitCanvas(cv, minH) {
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  if (!cv._aspect) {
+    var aw = parseFloat(cv.getAttribute('width')) || cv.width;
+    var ah = parseFloat(cv.getAttribute('height')) || cv.height;
+    cv._aspect = ah / (aw || 1);
+  }
+  var w = Math.max(2, cv.clientWidth || cv.width);
+  var h = Math.max(minH || 0, Math.round(w * cv._aspect));
+  cv.width = Math.max(2, Math.round(w * dpr));
+  cv.height = Math.max(2, Math.round(h * dpr));
+  cv.style.height = h + 'px';
+  var g = cv.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, h);
+  return { g: g, w: w, h: h };
+}
+
+/* ---------------------------------------------------------------- state */
+var S = {
+  type: 'flat', base: 0, feat: 0, rough: 0, roughScale: 30, roi: 220, cx: 0, cy: 0,
+  dim: '3d', sys: 2, rnd: 2, fx: 20, action: 3,
+  noise: 0.3, deform: 0, defScale: 90, pts: 2500, tolExp: 4, seed: 1,
+  view: 'shade', bench: [3, 0, 0],
+  yaw: -0.34, pitch: 0.78
+};
+var ref = null, cond = null, pred = null, metrics = null, land = null;
+var benchResult = null, course = null;
+var GRID = 81;
+
+function tol() { return Math.pow(10, -S.tolExp); }
+
+/* ---------------------------------------------------------------- build */
+function invalidateCourse() {
+  if (!course) return;
+  course=null; $('#results').style.display='none'; $('#noResults').style.display='';
+  $('#noResults .empty').textContent='Settings changed. Run the course again to update the results.';
+  $('#csvBtn').disabled=true;
+}
+function rebuild() {
+  var cfg = {
+    type: S.type, base: S.base, feat: S.feat,
+    roughAmp: S.rough, roughScale: S.roughScale, roughSeed: 20240517,
+    grid: GRID, Lx: S.roi, Ly: S.roi, cx: S.cx, cy: S.cy
+  };
+  ref = buildReference(cfg);
+  cond = conditioning(ref, 2);
+  pred = predictSigma(cond, S.noise, S.pts, tol());
+  metrics = surfaceMetrics(ref);
+  land = null;
+  runBench();
+}
+
+/* ---------------------------------------------------------------- bench */
+function applyErrorToLive(live, err, sN, deform, rng, gs) {
+  var L = Float64Array.from(live), nP = (L.length / 3) | 0, p;
+  var dn = deform > 0 ? makeNoise((rng() * 2147483647) >>> 0) : null;
+  for (p = 0; p < nP; p++) {
+    var x = L[3*p], y = L[3*p+1], z = L[3*p+2];
+    if (dn) z += deform * dn(x, y, S.defScale);
+    L[3*p] = x + err[0];
+    L[3*p+1] = y + err[1];
+    L[3*p+2] = z + err[2] + (sN > 0 ? gs() * sN : 0);
+  }
+  L.surfaceChange = dn ? function(x,y){ return deform * dn(x,y,S.defScale); } : function(){return 0;};
+  return L;
+}
+function runBench() {
+  var rng = mulberry32(((S.seed >>> 0) * 2654435761 + 17) >>> 0), gs = makeGauss(rng);
+  var live = sampleLive(ref, S.pts, rng);
+  var L = applyErrorToLive(live, S.bench, S.noise, S.deform, rng, gs);
+  var r = registerICP(ref, L, { tol: tol() });
+  benchResult = {
+    truth: S.bench.slice(),
+    det: r.detected,
+    resid: [S.bench[0] - r.detected[0], S.bench[1] - r.detected[1], S.bench[2] - r.detected[2]],
+    rms: r.rms, rank: r.rank, used: r.used, iters: r.iters, failed: r.failed, status: r.status, surfaceChange: L.surfaceChange
+  };
+}
+
+/* ---------------------------------------------------------------- course */
+function runCourse() {
+  var seed = S.seed >>> 0;
+  var rngSys = mulberry32(seed ^ 0x9e3779b9), gsSys = makeGauss(rngSys);
+  var axes = S.dim === '3d' ? [0, 1, 2] : [{ x: 0, y: 1, z: 2 }[S.dim]];
+  var sysErr = [0, 0, 0], a;
+  for (a = 0; a < axes.length; a++) sysErr[axes[a]] = gsSys() * S.sys;
+
+  var rows = [], f;
+  for (f = 0; f < S.fx; f++) {
+    var rng = mulberry32((seed * 1000003 + f * 7919 + 13) >>> 0), gs = makeGauss(rng);
+    var truth = [0, 0, 0];
+    for (a = 0; a < axes.length; a++) truth[axes[a]] = sysErr[axes[a]] + gs() * S.rnd;
+    var live = sampleLive(ref, S.pts, rng);
+    var L = applyErrorToLive(live, truth, S.noise, S.deform, rng, gs);
+    var r = registerICP(ref, L, { tol: tol() });
+    var res = [truth[0] - r.detected[0], truth[1] - r.detected[1], truth[2] - r.detected[2]];
+    rows.push({
+      f: f + 1, truth: truth, det: r.detected, res: res,
+      mag: Math.hypot(res[0], res[1], res[2]), diverged: !!r.diverged, failed: r.failed, status: r.status,
+      truthMag: Math.hypot(truth[0], truth[1], truth[2]),
+      rms: r.rms, rank: r.rank, iters: r.iters
+    });
+  }
+  course = { rows: rows, sysErr: sysErr, axes: axes, at: Date.now(), cfg: JSON.parse(JSON.stringify(S)) };
+  return course;
+}
+
+/* ---------------------------------------------------------------- 3D view */
+function residualField(x, y, res) {
+  return ref.H(x - res[0], y - res[1]) + res[2] - ref.H(x, y) + (benchResult && benchResult.surfaceChange ? benchResult.surfaceChange(x-res[0],y-res[1]) : 0);
+}
+function draw3D() {
+  var cv = $('#cv3d');
+  var f = fitCanvas(cv), g = f.g, W = f.w, H = f.h;
+  g.fillStyle = '#080d0f'; g.fillRect(0, 0, W, H);
+  if (!ref) return;
+
+  var M = Math.min(56, ref.N);
+  var step = (ref.N - 1) / (M - 1);
+  var cyaw = Math.cos(S.yaw), syaw = Math.sin(S.yaw);
+  var cp = Math.cos(S.pitch), sp = Math.sin(S.pitch);
+
+  // gather vertices
+  var vx = new Float64Array(M * M), vy = new Float64Array(M * M), vz = new Float64Array(M * M);
+  var val = new Float64Array(M * M), lam = new Float64Array(M * M);
+  var zmin = Infinity, zmax = -Infinity, vmin = Infinity, vmax = -Infinity, i, j, k;
+  var res = benchResult ? benchResult.resid : [0, 0, 0];
+  var lx = -0.42, ly = 0.38, lz = 0.82, ll = Math.hypot(lx, ly, lz); lx/=ll; ly/=ll; lz/=ll;
+
+  for (j = 0; j < M; j++) for (i = 0; i < M; i++) {
+    var gi = Math.round(i * step), gj = Math.round(j * step), gk = gj * ref.N + gi;
+    var x = ref.x0 + gi * ref.dx, y = ref.y0 + gj * ref.dy, z = ref.z[gk];
+    k = j * M + i;
+    vx[k] = x; vy[k] = y; vz[k] = z;
+    if (z < zmin) zmin = z; if (z > zmax) zmax = z;
+    var v;
+    if (S.view === 'slope') v = Math.sqrt(ref.nx[gk]*ref.nx[gk] + ref.ny[gk]*ref.ny[gk]);
+    else if (S.view === 'resid') v = residualField(x, y, res) * ref.nz[gk];
+    else v = z;
+    val[k] = v;
+    if (v < vmin) vmin = v; if (v > vmax) vmax = v;
+    lam[k] = Math.max(0.12, ref.nx[gk]*lx + ref.ny[gk]*ly + ref.nz[gk]*lz);
+  }
+  var flatSurf = !(zmax - zmin > 1e-6);
+  if (flatSurf) { zmax = zmin + 1; }
+  var zc = (zmin + zmax) / 2;
+
+  // projection scale
+  var ox = ref.x0 + ref.Lx / 2, oy = ref.y0 + ref.Ly / 2;
+  function raw(xw, yw, z) {
+    var x = xw - ox, y = yw - oy, z1 = z - zc;
+    var x1 = x * cyaw - y * syaw, y1 = x * syaw + y * cyaw;
+    var up = z1 * cp + y1 * sp;
+    var depth = y1 * cp - z1 * sp;
+    return [x1, -up, depth];
+  }
+  // fit: bounding box of the ROI corners plus the axis triad, at the current rotation
+  var ax0 = ref.x0 - 14, ay0 = ref.y0 - 14;
+  var fitPts = [], fx, fy, fz;
+  for (fx = 0; fx < 2; fx++) for (fy = 0; fy < 2; fy++) for (fz = 0; fz < 2; fz++)
+    fitPts.push(raw(ref.x0 + fx * ref.Lx, ref.y0 + fy * ref.Ly, fz ? zmax : zmin));
+  fitPts.push(raw(ax0, ay0, zmin), raw(ax0 + 42, ay0, zmin), raw(ax0, ay0 + 42, zmin), raw(ax0, ay0, zmin + 42));
+  var bx0 = Infinity, bx1 = -Infinity, by0 = Infinity, by1 = -Infinity;
+  for (i = 0; i < fitPts.length; i++) {
+    if (fitPts[i][0] < bx0) bx0 = fitPts[i][0];
+    if (fitPts[i][0] > bx1) bx1 = fitPts[i][0];
+    if (fitPts[i][1] < by0) by0 = fitPts[i][1];
+    if (fitPts[i][1] > by1) by1 = fitPts[i][1];
+  }
+  var sc = Math.min(W * 0.90 / Math.max(1e-6, bx1 - bx0), H * 0.90 / Math.max(1e-6, by1 - by0));
+  if (!isFinite(sc) || sc <= 0) sc = 1;
+  var cx = W / 2 - (bx0 + bx1) / 2 * sc, cy = H / 2 - (by0 + by1) / 2 * sc;
+  function proj(xw, yw, z) {
+    var r = raw(xw, yw, z);
+    return [cx + r[0] * sc, cy + r[1] * sc, r[2]];
+  }
+  var px = new Float64Array(M * M), py = new Float64Array(M * M), pd = new Float64Array(M * M);
+  for (k = 0; k < M * M; k++) { var q = proj(vx[k], vy[k], vz[k]); px[k] = q[0]; py[k] = q[1]; pd[k] = q[2]; }
+
+  // colour scaling
+  var washScale = 1;
+  if (S.view === 'resid') washScale = Math.max(0.5, Math.max(Math.abs(vmin), Math.abs(vmax)));
+  if (S.view === 'slope') { vmin = 0; vmax = Math.max(0.05, vmax); }
+
+  // painter's algorithm
+  var quads = [], n = 0;
+  var order = new Int32Array((M - 1) * (M - 1));
+  var depth = new Float64Array((M - 1) * (M - 1));
+  for (j = 0; j < M - 1; j++) for (i = 0; i < M - 1; i++) {
+    var q0 = j*M+i, q1 = j*M+i+1, q2 = (j+1)*M+i+1, q3 = (j+1)*M+i;
+    order[n] = n; depth[n] = (pd[q0] + pd[q1] + pd[q2] + pd[q3]) * 0.25; n++;
+  }
+  var idx = Array.prototype.slice.call(order.subarray(0, n));
+  idx.sort(function (a, b) { return depth[b] - depth[a]; });
+
+  var mesh = (M <= 60);
+  for (var t = 0; t < idx.length; t++) {
+    var q = idx[t], ii = q % (M - 1), jj = (q / (M - 1)) | 0;
+    var a0 = jj*M+ii, a1 = jj*M+ii+1, a2 = (jj+1)*M+ii+1, a3 = (jj+1)*M+ii;
+    var vv = (val[a0] + val[a1] + val[a2] + val[a3]) * 0.25;
+    var col;
+    if (S.view === 'resid') col = washColor(vv, washScale);
+    else col = rampColor(vmax > vmin ? (vv - vmin) / (vmax - vmin) : 0.5);
+    var sh = (lam[a0] + lam[a1] + lam[a2] + lam[a3]) * 0.25;
+    var shade = 0.34 + 0.66 * sh;
+    var m3 = col.match(/\d+/g);
+    g.fillStyle = 'rgb(' + Math.round(m3[0]*shade) + ',' + Math.round(m3[1]*shade) + ',' + Math.round(m3[2]*shade) + ')';
+    g.beginPath();
+    g.moveTo(px[a0], py[a0]); g.lineTo(px[a1], py[a1]); g.lineTo(px[a2], py[a2]); g.lineTo(px[a3], py[a3]);
+    g.closePath(); g.fill();
+    if (mesh && ((ii % 6 === 0) || (jj % 6 === 0))) { g.strokeStyle = 'rgba(255,255,255,0.055)'; g.lineWidth = 0.6; g.stroke(); }
+  }
+
+  // axis triad
+  var origin = proj(ax0, ay0, zmin);
+  var axesDef = [[42,0,0,'X','#ff6a52'],[0,42,0,'Y','#2fd4c1'],[0,0,42,'Z','#56a2ff']];
+  g.lineWidth = 1.6; g.font = '600 11px ' + getComputedStyle(document.body).fontFamily;
+  for (i = 0; i < 3; i++) {
+    var d = axesDef[i];
+    var e = proj(ax0 + d[0], ay0 + d[1], zmin + d[2]);
+    g.strokeStyle = d[4]; g.beginPath(); g.moveTo(origin[0], origin[1]); g.lineTo(e[0], e[1]); g.stroke();
+    g.fillStyle = d[4]; g.fillText(d[3], e[0] + 3, e[1] + 3);
+  }
+
+  // legend text
+  if (S.view === 'shade') {
+    $('#lgLo').textContent = flatSurf ? 'no height variation at all' : fmt(zmin, 1) + ' mm';
+    $('#lgHi').textContent = flatSurf ? '' : fmt(zmax, 1) + ' mm';
+    $('#ramp').style.background = 'linear-gradient(90deg,' + HEIGHT_RAMP.join(',') + ')'; }
+  else if (S.view === 'slope') {
+    $('#lgLo').textContent = flatSurf ? 'flat: Z still measurable' : 'low slope (Z information remains)';
+    $('#lgHi').textContent = flatSurf ? '' : 'steep, |n⊥| ' + fmt(vmax, 2);
+    $('#ramp').style.background = 'linear-gradient(90deg,' + HEIGHT_RAMP.join(',') + ')'; }
+  else { $('#lgLo').textContent = '−' + fmt(washScale, 1) + ' mm'; $('#lgHi').textContent = '+' + fmt(washScale, 1) + ' mm';
+    $('#ramp').style.background = 'linear-gradient(90deg,#2f6fe0,#3d9c62,#e04a30)'; }
+}
+
+/* ---------------------------------------------------------------- charts */
+function axesFrame(g, W, H, pad, xr, yr, opt) {
+  opt = opt || {};
+  var L = pad.l, R = W - pad.r, T = pad.t, B = H - pad.b;
+  g.strokeStyle = '#26343a'; g.lineWidth = 1;
+  g.fillStyle = '#8ba0a8'; g.font = '400 10px ' + getComputedStyle(document.body).fontFamily;
+  var i, ticks = opt.yTicks || 5;
+  for (i = 0; i <= ticks; i++) {
+    var yv = yr[0] + (yr[1] - yr[0]) * i / ticks;
+    var yy = B - (yv - yr[0]) / (yr[1] - yr[0]) * (B - T);
+    g.beginPath(); g.moveTo(L, yy); g.lineTo(R, yy); g.stroke();
+    g.textAlign = 'right'; g.textBaseline = 'middle';
+    g.fillText(fmt(yv, opt.yDec === undefined ? 1 : opt.yDec), L - 6, yy);
+  }
+  if (opt.xTicks) {
+    for (i = 0; i <= opt.xTicks; i++) {
+      var xv = xr[0] + (xr[1] - xr[0]) * i / opt.xTicks;
+      var xx = L + (xv - xr[0]) / (xr[1] - xr[0]) * (R - L);
+      g.strokeStyle = '#1e2a2f'; g.beginPath(); g.moveTo(xx, T); g.lineTo(xx, B); g.stroke();
+      g.textAlign = 'center'; g.textBaseline = 'top'; g.fillStyle = '#63787f';
+      g.fillText(fmt(xv, opt.xDec === undefined ? 0 : opt.xDec), xx, B + 5);
+    }
+  }
+  if (opt.xLabel) { g.textAlign = 'center'; g.textBaseline = 'bottom'; g.fillStyle = '#63787f'; g.fillText(opt.xLabel, (L + R) / 2, H - 1); }
+  if (opt.yLabel) { g.save(); g.translate(9, (T + B) / 2); g.rotate(-Math.PI/2); g.textAlign = 'center'; g.textBaseline = 'top'; g.fillStyle = '#63787f'; g.fillText(opt.yLabel, 0, 0); g.restore(); }
+  return { L: L, R: R, T: T, B: B,
+    X: function (v) { return L + (v - xr[0]) / (xr[1] - xr[0] || 1) * (R - L); },
+    Y: function (v) { return B - (v - yr[0]) / (yr[1] - yr[0] || 1) * (B - T); } };
+}
+var AXC = ['#ff6a52', '#2fd4c1', '#56a2ff'], AXN = ['X lat', 'Y long', 'Z vert'];
+
+function drawLandscape() {
+  var cv = $('#cvLand'), f = fitCanvas(cv, 200), g = f.g, W = f.w, H = f.h;
+  if (!ref) return;
+  if (!land) land = [costLandscape(ref, 0, 10, 41, 600), costLandscape(ref, 1, 10, 41, 600), costLandscape(ref, 2, 10, 41, 600)];
+  var ymax = 0.2, i, k;
+  for (k = 0; k < 3; k++) for (i = 0; i < land[k].length; i++) if (isFinite(land[k][i].rms)) ymax = Math.max(ymax, land[k][i].rms);
+  ymax *= 1.12;
+  var A = axesFrame(g, W, H, { l: 44, r: 12, t: 12, b: 30 }, [-10, 10], [-ymax * 0.06, ymax],
+    { yTicks: 4, yDec: 2, xTicks: 4, xLabel: 'applied shift (mm)' });
+  g.strokeStyle = '#4a5f67'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(A.L, A.Y(0)); g.lineTo(A.R, A.Y(0)); g.stroke();
+  for (k = 0; k < 3; k++) {
+    g.strokeStyle = AXC[k]; g.lineWidth = 2.4; g.beginPath();
+    for (i = 0; i < land[k].length; i++) {
+      var p = land[k][i]; if (!isFinite(p.rms)) continue;
+      var xx = A.X(p.d), yy = A.Y(p.rms);
+      if (i === 0) g.moveTo(xx, yy); else g.lineTo(xx, yy);
+    }
+    g.stroke();
+  }
+  g.strokeStyle = 'rgba(255,255,255,.22)'; g.setLineDash([3,3]); g.lineWidth = 1;
+  g.beginPath(); g.moveTo(A.X(0), A.T); g.lineTo(A.X(0), A.B); g.stroke(); g.setLineDash([]);
+}
+
+function drawBench() {
+  var cv = $('#cvBench'), f = fitCanvas(cv, 215), g = f.g, W = f.w, H = f.h;
+  if (!benchResult) return;
+  var b = benchResult;
+  var lim = Math.max(1, Math.abs(b.truth[0]), Math.abs(b.truth[1]), Math.abs(b.truth[2]),
+                     Math.abs(b.det[0]), Math.abs(b.det[1]), Math.abs(b.det[2])) * 1.25;
+  var A = axesFrame(g, W, H, { l: 46, r: 12, t: 22, b: 34 }, [0, 3], [-lim, lim],
+    { yTicks: 6, yDec: 1, yLabel: 'mm' });
+  g.strokeStyle = '#3a4c54'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(A.L, A.Y(0)); g.lineTo(A.R, A.Y(0)); g.stroke();
+  var bw = (A.R - A.L) / 3;
+  for (var k = 0; k < 3; k++) {
+    var c0 = A.L + bw * k + bw * 0.5;
+    var wT = bw * 0.28, wD = bw * 0.28;
+    // true
+    g.fillStyle = 'rgba(255,255,255,.16)';
+    g.fillRect(c0 - wT - 4, Math.min(A.Y(0), A.Y(b.truth[k])), wT, Math.abs(A.Y(b.truth[k]) - A.Y(0)));
+    g.strokeStyle = 'rgba(255,255,255,.4)'; g.lineWidth = 1;
+    g.strokeRect(c0 - wT - 4, Math.min(A.Y(0), A.Y(b.truth[k])), wT, Math.abs(A.Y(b.truth[k]) - A.Y(0)));
+    // detected
+    g.fillStyle = AXC[k];
+    g.fillRect(c0 + 4, Math.min(A.Y(0), A.Y(b.det[k])), wD, Math.abs(A.Y(b.det[k]) - A.Y(0)));
+    g.fillStyle = '#8ba0a8'; g.font = '500 11px ' + getComputedStyle(document.body).fontFamily;
+    g.textAlign = 'center'; g.textBaseline = 'top';
+    g.fillText(AXN[k], c0, A.B + 6);
+  }
+  g.font = '400 10.5px ' + getComputedStyle(document.body).fontFamily;
+  g.textAlign = 'left'; g.textBaseline = 'top';
+  g.strokeStyle = 'rgba(255,255,255,.45)'; g.lineWidth = 1;
+  g.strokeRect(A.L + 2.5, A.T - 14.5, 8, 8);
+  g.fillStyle = '#8ba0a8'; g.fillText('outlined = true patient shift', A.L + 15, A.T - 16);
+  g.fillStyle = AXC[0]; g.fillRect(A.L + 165, A.T - 15, 3, 9);
+  g.fillStyle = AXC[1]; g.fillRect(A.L + 169, A.T - 15, 3, 9);
+  g.fillStyle = AXC[2]; g.fillRect(A.L + 173, A.T - 15, 3, 9);
+  g.fillStyle = '#8ba0a8'; g.fillText('solid = detected by SGRT', A.L + 181, A.T - 16);
+}
+
+function drawApplied() {
+  var cv = $('#cvApplied'), f = fitCanvas(cv, 225), g = f.g, W = f.w, H = f.h;
+  if (!course) return;
+  var R = course.rows, lim = 0.6, i, k;
+  for (i = 0; i < R.length; i++) for (k = 0; k < 3; k++)
+    lim = Math.max(lim, Math.abs(R[i].truth[k]), Math.abs(R[i].det[k]));
+  lim *= 1.18;
+  var A = axesFrame(g, W, H, { l: 46, r: 12, t: 14, b: 34 }, [1, Math.max(2, R.length)], [-lim, lim],
+    { yTicks: 6, yDec: 1, xTicks: Math.min(R.length - 1, 10), xLabel: 'fraction', yLabel: 'setup error (mm)' });
+  g.strokeStyle = '#4a5f67'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(A.L, A.Y(0)); g.lineTo(A.R, A.Y(0)); g.stroke();
+
+  // systematic component of each axis, repeated every fraction
+  g.globalAlpha = 0.45; g.setLineDash([6, 5]); g.lineWidth = 1.2;
+  for (k = 0; k < 3; k++) {
+    if (Math.abs(course.sysErr[k]) < 1e-9) continue;
+    g.strokeStyle = AXC[k];
+    g.beginPath(); g.moveTo(A.L, A.Y(course.sysErr[k])); g.lineTo(A.R, A.Y(course.sysErr[k])); g.stroke();
+  }
+  g.setLineDash([]); g.globalAlpha = 1;
+
+  for (k = 0; k < 3; k++) {
+    // applied
+    g.strokeStyle = AXC[k]; g.lineWidth = 1.8; g.beginPath();
+    for (i = 0; i < R.length; i++) {
+      var xx = A.X(R[i].f), yy = A.Y(R[i].truth[k]);
+      if (i === 0) g.moveTo(xx, yy); else g.lineTo(xx, yy);
+    }
+    g.stroke();
+    g.fillStyle = AXC[k];
+    for (i = 0; i < R.length; i++) { g.beginPath(); g.arc(A.X(R[i].f), A.Y(R[i].truth[k]), 2.6, 0, 6.284); g.fill(); }
+    // detected
+    g.lineWidth = 1.5;
+    for (i = 0; i < R.length; i++) {
+      g.beginPath(); g.arc(A.X(R[i].f), A.Y(R[i].det[k]), 4.2, 0, 6.284); g.stroke();
+    }
+  }
+}
+
+function drawTime() {
+  var cv = $('#cvTime'), f = fitCanvas(cv, 225), g = f.g, W = f.w, H = f.h;
+  if (!course) return;
+  var R = course.rows, lim = 0.6, i, k;
+  for (i = 0; i < R.length; i++) for (k = 0; k < 3; k++) lim = Math.max(lim, Math.abs(R[i].res[k]));
+  lim *= 1.18;
+  var A = axesFrame(g, W, H, { l: 46, r: 12, t: 14, b: 34 }, [1, Math.max(2, R.length)], [-lim, lim],
+    { yTicks: 6, yDec: 1, xTicks: Math.min(R.length - 1, 10), xLabel: 'fraction', yLabel: 'residual (mm)' });
+  g.strokeStyle = '#4a5f67'; g.beginPath(); g.moveTo(A.L, A.Y(0)); g.lineTo(A.R, A.Y(0)); g.stroke();
+  for (k = 0; k < 3; k++) {
+    g.strokeStyle = AXC[k]; g.lineWidth = 1.8; g.beginPath();
+    for (i = 0; i < R.length; i++) { var xx = A.X(R[i].f), yy = A.Y(R[i].res[k]); if (i === 0) g.moveTo(xx, yy); else g.lineTo(xx, yy); }
+    g.stroke();
+    g.fillStyle = AXC[k];
+    for (i = 0; i < R.length; i++) { g.beginPath(); g.arc(A.X(R[i].f), A.Y(R[i].res[k]), 2.4, 0, 6.284); g.fill(); }
+  }
+}
+
+function drawMag() {
+  var cv = $('#cvMag'), f = fitCanvas(cv, 195), g = f.g, W = f.w, H = f.h;
+  if (!course) return;
+  var R = course.rows, ymax = Math.max(S.action * 1.3, 0.5), i;
+  for (i = 0; i < R.length; i++) ymax = Math.max(ymax, R[i].mag);
+  ymax *= 1.1;
+  var A = axesFrame(g, W, H, { l: 40, r: 10, t: 12, b: 32 }, [0, Math.max(1, R.length)], [0, ymax],
+    { yTicks: 4, yDec: 1, xTicks: Math.min(R.length, 8), xLabel: 'fraction', yLabel: 'mm' });
+  var bw = Math.max(2, (A.R - A.L) / Math.max(1, R.length) * 0.66);
+  for (i = 0; i < R.length; i++) {
+    var xx = A.X(i + 0.5), over = R[i].mag > S.action;
+    g.fillStyle = over ? '#ff6a52' : '#2fd4c1';
+    g.fillRect(xx - bw / 2, A.Y(R[i].mag), bw, A.B - A.Y(R[i].mag));
+  }
+  g.strokeStyle = '#ffc046'; g.setLineDash([5,4]); g.lineWidth = 1.3;
+  g.beginPath(); g.moveTo(A.L, A.Y(S.action)); g.lineTo(A.R, A.Y(S.action)); g.stroke(); g.setLineDash([]);
+  g.fillStyle = '#ffc046'; g.font = '500 10px ' + getComputedStyle(document.body).fontFamily;
+  g.textAlign = 'right'; g.textBaseline = 'bottom';
+  g.fillText('action level ' + fmt(S.action, 1) + ' mm', A.R - 3, A.Y(S.action) - 3);
+}
+
+function drawHist() {
+  var cv = $('#cvHist'), f = fitCanvas(cv, 195), g = f.g, W = f.w, H = f.h;
+  if (!course) return;
+  var R = course.rows, all = [], k, i;
+  for (k = 0; k < 3; k++) for (i = 0; i < R.length; i++) all.push(R[i].res[k]);
+  var lim = 0.5; for (i = 0; i < all.length; i++) lim = Math.max(lim, Math.abs(all[i]));
+  lim *= 1.05;
+  var NB = 21, bins = [[], [], []];
+  for (k = 0; k < 3; k++) { bins[k] = new Array(NB).fill(0);
+    for (i = 0; i < R.length; i++) {
+      var bi = clamp(Math.floor((R[i].res[k] + lim) / (2 * lim) * NB), 0, NB - 1);
+      bins[k][bi]++;
+    } }
+  var ymax = 1;
+  for (k = 0; k < 3; k++) for (i = 0; i < NB; i++) ymax = Math.max(ymax, bins[k][i]);
+  var A = axesFrame(g, W, H, { l: 34, r: 10, t: 12, b: 32 }, [-lim, lim], [0, ymax],
+    { yTicks: Math.min(4, ymax), yDec: 0, xTicks: 4, xDec: 1, xLabel: 'residual (mm)', yLabel: 'fractions' });
+  var bwpx = (A.R - A.L) / NB;
+  for (k = 0; k < 3; k++) {
+    g.fillStyle = AXC[k]; g.globalAlpha = 0.5;
+    for (i = 0; i < NB; i++) {
+      if (!bins[k][i]) continue;
+      var x0 = A.L + i * bwpx + k * bwpx / 3;
+      g.fillRect(x0 + 0.5, A.Y(bins[k][i]), bwpx / 3 - 1, A.B - A.Y(bins[k][i]));
+    }
+    g.globalAlpha = 1;
+  }
+  g.strokeStyle = 'rgba(255,255,255,.3)'; g.setLineDash([3,3]);
+  g.beginPath(); g.moveTo(A.X(0), A.T); g.lineTo(A.X(0), A.B); g.stroke(); g.setLineDash([]);
+}
+
+function drawScatter() {
+  var cv = $('#cvScat');
+  var narrow = (cv.clientWidth || 900) < 660;
+  var f = fitCanvas(cv, narrow ? 780 : 260), g = f.g, W = f.w, H = f.h;
+  if (!course) return;
+  var R = course.rows, k, i;
+  var lim = 1;
+  for (i = 0; i < R.length; i++) for (k = 0; k < 3; k++) lim = Math.max(lim, Math.abs(R[i].truth[k]), Math.abs(R[i].det[k]));
+  lim *= 1.15;
+  var pw = narrow ? W : W / 3, ph = narrow ? H / 3 : H;
+  for (k = 0; k < 3; k++) {
+    g.save(); g.translate(narrow ? 0 : k * pw, narrow ? k * ph : 0);
+    var A = axesFrame(g, pw, ph, { l: 46, r: 14, t: 24, b: 34 }, [-lim, lim], [-lim, lim],
+      { yTicks: 4, yDec: 1, xTicks: 4, xDec: 1, xLabel: 'true (mm)', yLabel: 'detected (mm)' });
+    g.strokeStyle = 'rgba(255,255,255,.25)'; g.setLineDash([4,4]); g.lineWidth = 1;
+    g.beginPath(); g.moveTo(A.X(-lim), A.Y(-lim)); g.lineTo(A.X(lim), A.Y(lim)); g.stroke(); g.setLineDash([]);
+    var xs = R.map(function (r) { return r.truth[k]; }), ys = R.map(function (r) { return r.det[k]; });
+    var sl = lsSlope(xs, ys);
+    g.fillStyle = AXC[k];
+    for (i = 0; i < R.length; i++) { g.beginPath(); g.arc(A.X(xs[i]), A.Y(ys[i]), 3, 0, 6.284); g.fill(); }
+    g.font = '600 11px ' + getComputedStyle(document.body).fontFamily;
+    g.textAlign = 'left'; g.textBaseline = 'top';
+    g.fillStyle = AXC[k]; g.fillText(AXN[k], A.L + 2, 5);
+    g.fillStyle = '#8ba0a8'; g.font = '400 10.5px ' + getComputedStyle(document.body).fontFamily;
+    g.fillText('sensitivity ' + (isFinite(sl) ? fmt(sl, 2) : '—'), A.L + 46, 5);
+    g.restore();
+  }
+}
+
+/* ---------------------------------------------------------------- render UI */
+function renderBars() {
+  var host=$('#detBars'); host.innerHTML='';
+  for(var k=0;k<3;k++) {
+    var solv=pred.axisSolvable[k], dead=solv<.02, coupled=solv<.98;
+    var sens=Math.sqrt(Math.max(0,cond.A[k][k]));
+    var num=dead?'unresolved':coupled?'coupled':'±'+fmt(pred.sigma[k],3)+' mm';
+    var row=document.createElement('div'); row.className='bar-row';
+    row.innerHTML='<span class="ax">'+['X','Y','Z'][k]+'</span><span class="bar-track"><span class="bar-fill" style="width:'+Math.max(0,sens*100)+'%"></span></span><span class="num'+(coupled?' dead':'')+'">'+num+'</span>';
+    host.appendChild(row);
+  }
+  $('#rkTxt').textContent=String(pred.rank);
+  var v=$('#verdict');
+  if(pred.rank<3) {
+    v.className='verdict warn';
+    v.innerHTML='<b>'+pred.rank+' of 3 independent translation directions are recoverable.</b> A small mismatch does not prove that all motion was found. On a tilted plane, X and Z may each appear in the reported shift, but only their combined component along the normal is measured.';
+  } else {
+    v.className='verdict good';
+    v.innerHTML='<b>All three translation directions are locally identifiable in this model.</b> The noise-only estimate is not overall accuracy. Deformation, sampling, calibration, rotations and target–surface mismatch are not captured by those uncertainty numbers.';
+  }
+}
+
+var METRIC_DEFS = [
+  { key: 'Sq',  lbl: 'Sq — RMS height',        d: 2, u: 'mm',  sub: 'overall relief' },
+  { key: 'Sz',  lbl: 'Sz — peak to valley',    d: 1, u: 'mm',  sub: 'full range' },
+  { key: 'Sa',  lbl: 'Sa — mean height dev.',  d: 2, u: 'mm',  sub: '' },
+  { key: 'Ssk', lbl: 'Ssk — skewness',         d: 2, u: '',    sub: 'peaks vs valleys' },
+  { key: 'Sku', lbl: 'Sku — kurtosis',         d: 2, u: '',    sub: '3 = Gaussian' },
+  { key: 'Sdq', lbl: 'Sdq — RMS slope',        d: 3, u: '',    sub: 'slope alone is insufficient' },
+  { key: 'Sdr', lbl: 'Sdr — area increase',    d: 2, u: '%',   sub: 'vs flat projection' }
+];
+function renderMetrics() {
+  var host = $('#metricGrid'); host.innerHTML = '';
+  function cell(lbl, val, sub, colour) {
+    var d = document.createElement('div'); d.className = 'stat';
+    d.innerHTML = '<div class="lbl">' + lbl + '</div><div class="val"' +
+      (colour ? ' style="color:' + colour + '"' : '') + '>' + val + '</div>' +
+      '<div class="sub">' + (sub || '&nbsp;') + '</div>';
+    host.appendChild(d);
+  }
+  if (metrics) METRIC_DEFS.forEach(function (m) {
+    cell(m.lbl, fmt(metrics[m.key], m.d) + (m.u ? ' ' + m.u : ''), m.sub);
+  });
+  var e = pred.eig.values, lmax = Math.max(e[0], 1e-300);
+  var condNo = e[2] > 1e-14 * lmax ? lmax / e[2] : Infinity;
+  cell('Normal-matrix rank', pred.rank + ' / 3', 'solvable directions', pred.rank < 3 ? '#ff6a52' : '#86d95f');
+  cell('Condition number', isFinite(condNo) ? (condNo > 1e6 ? condNo.toExponential(1) : fmt(condNo, 0)) : '∞',
+       'λmax / λmin', condNo > 1e4 ? '#ff6a52' : (condNo > 100 ? '#ffc046' : '#86d95f'));
+  cell('In-plane normal power', fmt(1 - cond.A[2][2], 3), '⟨nx²+ny²⟩', null);
+}
+
+function renderBench() {
+  var b = benchResult, tb = $('#benchTbl').querySelector('tbody');
+  function mag(v) { return Math.hypot(v[0], v[1], v[2]); }
+  var rows = [
+    ['True patient shift', b.truth, ''],
+    ['Detected by SGRT', b.det, ''],
+    ['Residual left on patient', b.resid, 'flag']
+  ];
+  tb.innerHTML = rows.map(function (r) {
+    var flag = r[2] === 'flag';
+    return '<tr><td>' + r[0] + '</td>' + [0,1,2].map(function (k) {
+      var cls = (flag && Math.abs(r[1][k]) > S.action) ? ' class="flagged"' : '';
+      return '<td' + cls + '>' + fmt(r[1][k], 2) + '</td>';
+    }).join('') + '<td' + ((flag && mag(r[1]) > S.action) ? ' class="flagged"' : '') + '>' + fmt(mag(r[1]), 2) + '</td></tr>';
+  }).join('');
+  $('#benchRms').textContent = b.failed ? b.status + ': no correction applied' : fmt(b.rms, 3) + ' mm';
+  drawBench();
+}
+
+function renderCourse() {
+  if (!course) return;
+  var R = course.rows;
+  $('#results').style.display = ''; $('#noResults').style.display = 'none';
+  $('#csvBtn').disabled = false;
+
+  var resAx = [0,1,2].map(function (k) { return R.map(function (r) { return r.res[k]; }); });
+  var mags = R.map(function (r) { return r.mag; });
+  var over = mags.filter(function (m) { return m > S.action; }).length;
+  var trueMag = R.map(function (r) { return r.truthMag; });
+
+  // ---- headline stats
+  var sg = $('#summaryGrid'); sg.innerHTML = '';
+  function stat(lbl, val, sub, colour) {
+    var d = document.createElement('div'); d.className = 'stat';
+    d.innerHTML = '<div class="lbl">' + lbl + '</div><div class="val"' + (colour ? ' style="color:' + colour + '"' : '') +
+      '>' + val + '</div><div class="sub">' + (sub || '&nbsp;') + '</div>';
+    sg.appendChild(d);
+  }
+  var meanTrue = mean(trueMag), meanRes = mean(mags);
+  var caught = meanTrue > 1e-6 ? (1 - meanRes / meanTrue) * 100 : NaN;
+  stat('Mean 3D error presented', fmt(meanTrue, 2) + ' mm', 'before correction');
+  stat('Mean 3D error left', fmt(meanRes, 2) + ' mm', 'after correction',
+       meanRes > S.action ? '#ff6a52' : (meanRes > S.action / 2 ? '#ffc046' : '#86d95f'));
+  stat('Error removed', fmt(clamp(caught, -999, 100), 0) + '%', 'of what was presented',
+       caught < 50 ? '#ff6a52' : (caught < 90 ? '#ffc046' : '#86d95f'));
+  stat('Fractions over action level', over + ' / ' + R.length, '> ' + fmt(S.action, 1) + ' mm residual',
+       over > 0 ? '#ff6a52' : '#86d95f');
+  stat('Worst fraction', fmt(Math.max.apply(null, mags), 2) + ' mm', '3D residual');
+  stat('95th centile', fmt(pct(mags, 0.95), 2) + ' mm', '3D residual');
+  var validRms=R.filter(function(r){return !r.failed && isFinite(r.rms);}).map(function(r){return r.rms;});
+  stat('Mean valid-fit mismatch', fmt(validRms.length ? mean(validRms) : NaN, 3) + ' mm',
+       'model point-to-plane RMS');
+  var failed = R.filter(function (r) { return r.failed; }).length;
+  if (failed) stat('Registration failures', failed + ' / ' + R.length,
+    'no correction applied', '#ff6a52');
+
+  // ---- per-axis table
+  var head = '<tr><th>Axis</th><th>Systematic true</th><th>Mean residual M</th><th>Random SD σ</th>' +
+             '<th>Sensitivity</th><th>|resid| 95th</th><th>Max |resid|</th></tr>';
+  $('#axisTbl').querySelector('thead').innerHTML = head;
+  $('#axisTbl').querySelector('tbody').innerHTML = [0,1,2].map(function (k) {
+    var M = mean(resAx[k]), s = sd(resAx[k]);
+    var sl = lsSlope(R.map(function (r) { return r.truth[k]; }), R.map(function (r) { return r.det[k]; }));
+    var abs = resAx[k].map(Math.abs);
+    var blind = pred.axisSolvable[k] < 0.02;
+    return '<tr><td>' + AXN[k] + (blind ? ' <span style="color:#ff6a52">blind</span>' : '') + '</td>' +
+      '<td>' + fmt(course.sysErr[k], 2) + '</td>' +
+      '<td' + (Math.abs(M) > S.action / 2 ? ' class="flagged"' : '') + '>' + fmt(M, 2) + '</td>' +
+      '<td>' + fmt(s, 2) + '</td>' +
+      '<td' + ((isFinite(sl) && sl < 0.5) ? ' class="flagged"' : '') + '>' + (isFinite(sl) ? fmt(sl, 2) : '—') + '</td>' +
+      '<td>' + fmt(pct(abs, 0.95), 2) + '</td>' +
+      '<td>' + fmt(Math.max.apply(null, abs), 2) + '</td></tr>';
+  }).join('');
+
+  // ---- fraction log
+  $('#fxTbl').querySelector('thead').innerHTML =
+    '<tr><th>Fx</th><th>true X</th><th>true Y</th><th>true Z</th>' +
+    '<th>det X</th><th>det Y</th><th>det Z</th>' +
+    '<th>res X</th><th>res Y</th><th>res Z</th><th>3D res</th><th>RMS fit</th><th>rank / status</th></tr>';
+  $('#fxTbl').querySelector('tbody').innerHTML = R.map(function (r) {
+    return '<tr><td>' + r.f + '</td>' +
+      r.truth.map(function (v) { return '<td>' + fmt(v, 2) + '</td>'; }).join('') +
+      r.det.map(function (v) { return '<td>' + fmt(v, 2) + '</td>'; }).join('') +
+      r.res.map(function (v) { return '<td' + (Math.abs(v) > S.action ? ' class="flagged"' : '') + '>' + fmt(v, 2) + '</td>'; }).join('') +
+      '<td' + (r.mag > S.action ? ' class="flagged"' : '') + '>' + fmt(r.mag, 2) + '</td>' +
+      '<td>' + fmt(r.rms, 3) + '</td><td' + (r.failed ? ' class="flagged"' : '') + '>' +
+      r.rank + (r.failed ? ' / ' + r.status : '') + '</td></tr>';
+  }).join('');
+
+  $('#magNote').textContent = over + ' of ' + R.length + ' over action level';
+  drawApplied(); drawTime(); drawMag(); drawHist(); drawScatter();
+}
+
+/* ---------------------------------------------------------------- redraw */
+var rafPending = false;
+function refresh(full) {
+  if (full) { invalidateCourse(); $('#errBox').textContent=''; try { rebuild(); } catch (e) { showErr(e); return; } }
+  if (rafPending) return;
+  rafPending = true;
+  requestAnimationFrame(function () {
+    rafPending = false;
+    if ($('#advancedMode').hidden) return;
+    try {
+      renderBars(); renderMetrics(); renderBench(); draw3D(); drawLandscape();
+    } catch (e) { showErr(e); }
+  });
+}
+function showErr(e) {
+  $('#errBox').innerHTML = '<div class="err">Something went wrong while computing: ' +
+    String(e && e.message ? e.message : e) + '. Try reducing the point count or resetting a preset.</div>';
+  if (window.console) console.error(e);
+}
+
+/* ---------------------------------------------------------------- wiring */
+var suspend = false;
+var heavyTimer = null, benchTimer = null;
+function scheduleHeavy() {
+  if (suspend) return;
+  invalidateCourse();
+  clearTimeout(heavyTimer);
+  heavyTimer = setTimeout(function () { refresh(true); }, 70);
+}
+function scheduleBench() {
+  if (suspend) return;
+  clearTimeout(benchTimer);
+  benchTimer = setTimeout(function () {
+    try { runBench(); renderBench(); draw3D(); } catch (e) { showErr(e); }
+  }, 45);
+}
+function bindRange(id, key, scale, fmtFn, onChange) {
+  var el = $(id), out = $(id.replace('#s', '#v'));
+  function apply(init) {
+    var raw = parseFloat(el.value);
+    if (!isFinite(raw)) raw = 0;
+    S[key] = raw * scale;
+    if (out) out.textContent = fmtFn(S[key]);
+    if (init || suspend) return;
+    onChange();
+  }
+  el.addEventListener('input', function () { apply(false); });
+  apply(true);
+}
+
+/* surface controls */
+$$('.seg [data-surf]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    $$('.seg [data-surf]').forEach(function (o) { o.setAttribute('aria-pressed', String(o === b)); });
+    S.type = b.dataset.surf;
+    updateSurfaceLabels();
+    refresh(true);
+  });
+});
+function updateSurfaceLabels() {
+  var t = S.type;
+  var cfgs = {
+    flat:     { base: 'Plate tilt', bh: 'A tilted plane is still a plane. It cannot separate the three axes — it only mixes them.', feat: false },
+    cylinder: { base: 'Chest curvature', bh: 'A cylinder curves across X but is identical all the way along Y.', feat: false },
+    breast:   { base: 'Chest curvature', bh: 'The underlying thorax, curved laterally only.', feat: true,
+                fl: 'Breast prominence', fh: 'The mound and inframammary fold — the only features that pin down the sup/inf direction.' },
+    face:     { base: 'Head curvature', bh: 'The smooth ellipsoid of the skull.', feat: true,
+                fl: 'Feature prominence', fh: 'Nose, brow, orbits, cheeks, chin.' }
+  };
+  cfgs.incline = { base: 'Incline (head up)', bh: 'A flat plane rising towards the head, like an inclined board. Still a plane.', feat: false };
+  var c = cfgs[t] || cfgs.flat;
+  $$('.seg [data-surf]').forEach(function (o) { o.setAttribute('aria-pressed', String(o.dataset.surf === (t === 'incline' ? 'flat' : t))); });
+  $('#labBase').textContent = c.base;
+  $('#hintBase').textContent = c.bh;
+  $('#fldFeat').style.display = c.feat ? '' : 'none';
+  if (c.feat) { $('#labFeat').textContent = c.fl; $('#hintFeat').textContent = c.fh; }
+}
+
+$$('.seg [data-dim]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    $$('.seg [data-dim]').forEach(function (o) { o.setAttribute('aria-pressed', String(o === b)); });
+    S.dim = b.dataset.dim; invalidateCourse();
+  });
+});
+$$('.vp-tabs button').forEach(function (b) {
+  b.addEventListener('click', function () {
+    $$('.vp-tabs button').forEach(function (o) { o.setAttribute('aria-pressed', String(o === b)); });
+    S.view = b.dataset.view;
+    draw3D();
+  });
+});
+
+bindRange('#sBase', 'base', 0.01, function (v) { return Math.round(v * 100) + '%'; }, scheduleHeavy);
+bindRange('#sFeat', 'feat', 0.01, function (v) { return Math.round(v * 100) + '%'; }, scheduleHeavy);
+bindRange('#sRough', 'rough', 0.1, function (v) { return fmt(v, 1) + ' mm'; }, scheduleHeavy);
+bindRange('#sRoughSc', 'roughScale', 1, function (v) { return Math.round(v) + ' mm'; }, scheduleHeavy);
+bindRange('#sRoi', 'roi', 1, function (v) {
+  $('#roiNote').textContent = Math.round(v) + ' × ' + Math.round(v) + ' mm';
+  return Math.round(v) + ' mm';
+}, scheduleHeavy);
+
+bindRange('#sCx', 'cx', 1, function (v) { return (v > 0 ? '+' : '') + Math.round(v) + ' mm'; }, scheduleHeavy);
+bindRange('#sCy', 'cy', 1, function (v) { return (v > 0 ? '+' : '') + Math.round(v) + ' mm'; }, scheduleHeavy);
+
+var noop = function () { invalidateCourse(); };
+bindRange('#sSys', 'sys', 0.1, function (v) { return fmt(v, 1) + ' mm'; }, noop);
+bindRange('#sRnd', 'rnd', 0.1, function (v) { return fmt(v, 1) + ' mm'; }, noop);
+bindRange('#sFx', 'fx', 1, function (v) { $('#fxNote').textContent = Math.round(v) + ' fx'; return String(Math.round(v)); }, noop);
+bindRange('#sAction', 'action', 0.1, function (v) { return fmt(v, 1) + ' mm'; }, function () {
+  if (course) renderCourse();
+  if (benchResult) renderBench();
+});
+bindRange('#sNoise', 'noise', 0.01, function (v) { return fmt(v, 2) + ' mm'; }, scheduleHeavy);
+bindRange('#sDeform', 'deform', 0.01, function (v) {
+  var el = $('#vDeform'); if (el) el.className = v > 0 ? 'v' : 'v off';
+  return fmt(v, 2) + ' mm';
+}, scheduleHeavy);
+bindRange('#sDefSc', 'defScale', 1, function (v) { return Math.round(v) + ' mm'; }, scheduleHeavy);
+bindRange('#sPts', 'pts', 1, function (v) { return String(Math.round(v)); }, scheduleHeavy);
+bindRange('#sTol', 'tolExp', 1, function (v) { return '1e-' + Math.round(v); }, scheduleHeavy);
+
+(function bindBench() {
+  var ids = ['#bX', '#bY', '#bZ'], outs = ['#vbX', '#vbY', '#vbZ'];
+  ids.forEach(function (id, k) {
+    var el = $(id);
+    el.addEventListener('input', function () {
+      var raw = parseFloat(el.value);
+      S.bench[k] = isFinite(raw) ? raw * 0.1 : 0;
+      $(outs[k]).textContent = fmt(S.bench[k], 1);
+      if (suspend) return;
+      scheduleBench();
+    });
+    var v0 = parseFloat(el.value);
+    S.bench[k] = isFinite(v0) ? v0 * 0.1 : 0;
+    $(outs[k]).textContent = fmt(S.bench[k], 1);
+  });
+})();
+
+function setSeed(v) {
+  S.seed = (isFinite(v) && v >= 0) ? Math.floor(v) : 1;
+  $('#sSeed').value = S.seed;
+  $('#vSeed').textContent = String(S.seed);
+  refresh(true);
+}
+$('#sSeed').addEventListener('change', function () { setSeed(parseInt(this.value, 10)); });
+$('#newSeed').addEventListener('click', function () { setSeed(Math.floor(Math.random() * 100000)); });
+
+/* 3D drag */
+(function () {
+  var cv = $('#cv3d'), dragging = false, lx = 0, ly = 0;
+  function down(e) { dragging = true; var p = pt(e); lx = p.x; ly = p.y; cv.setPointerCapture && e.pointerId != null && cv.setPointerCapture(e.pointerId); }
+  function move(e) {
+    if (!dragging) return;
+    var p = pt(e);
+    S.yaw += (p.x - lx) * 0.0085;
+    S.pitch = clamp(S.pitch + (p.y - ly) * 0.006, 0.12, 1.5);
+    lx = p.x; ly = p.y; e.preventDefault(); draw3D();
+  }
+  function up() { dragging = false; }
+  function pt(e) {
+    var r = cv.getBoundingClientRect();
+    var t = e.touches && e.touches[0] ? e.touches[0] : e;
+    return { x: t.clientX - r.left, y: t.clientY - r.top };
+  }
+  cv.addEventListener('pointerdown', down); window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+  cv.addEventListener('touchstart', down, { passive: true });
+  cv.addEventListener('touchmove', move, { passive: false });
+  cv.addEventListener('touchend', up);
+})();
+
+/* run */
+$('#runBtn').addEventListener('click', function () {
+  var btn = this;
+  btn.disabled = true; btn.textContent = 'Running…';
+  $('#errBox').innerHTML = '';
+  setTimeout(function () {
+    try { clearTimeout(heavyTimer); rebuild(); runCourse(); renderCourse(); }
+    catch (e) { showErr(e); }
+    finally { btn.disabled = false; btn.textContent = 'Run the course'; }
+  }, 20);
+});
+
+/* CSV */
+$('#csvBtn').addEventListener('click', function () {
+  if (!course) return;
+  var c = course.cfg;
+  var head = ['# SGRT topography simulator export',
+    '# surface=' + c.type + ' base=' + fmt(c.base,3) + ' feature=' + fmt(c.feat,3) +
+    ' texture=' + fmt(c.rough,2) + 'mm scale=' + fmt(c.roughScale,0) + 'mm roi=' + fmt(c.roi,0) + 'mm cx='+c.cx+'mm cy='+c.cy+'mm',
+    '# Sigma=' + fmt(c.sys,2) + 'mm sigma=' + fmt(c.rnd,2) + 'mm mode=' + c.dim +
+    ' cameraNoise=' + fmt(c.noise,2) + 'mm deform=' + fmt(c.deform,2) + 'mm@' + fmt(c.defScale,0) + 'mm points=' + c.pts +
+    ' tol=1e-' + c.tolExp + ' seed=' + c.seed + ' action3D='+fmt(S.action,2)+'mm',
+    '# all values in mm',
+    'fraction,true_x,true_y,true_z,det_x,det_y,det_z,res_x,res_y,res_z,res_3d,surface_rms,rank,solver_status,correction_applied'].join('\n');
+  var body = course.rows.map(function (r) {
+    return [r.f, r.truth[0], r.truth[1], r.truth[2], r.det[0], r.det[1], r.det[2],
+            r.res[0], r.res[1], r.res[2], r.mag, r.rms, r.rank, r.status, r.failed ? 0 : 1]
+      .map(function (v, i) { return (i === 0 || i === 12) ? v : (typeof v === 'number' ? (isFinite(v) ? v.toFixed(4) : '') : v); }).join(',');
+  }).join('\n');
+  var blob = new Blob([head + '\n' + body + '\n'], { type: 'text/csv;charset=utf-8' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'sgrt-course-' + c.type + '-' + c.fx + 'fx.csv';
+  document.body.appendChild(a); a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+});
+
+/* presets */
+var BASE_PRESET = { rough: 0, roughScale: 30, roi: 220, cx: 0, cy: 0, dim: '3d',
+                    sys: 2, rnd: 2, fx: 20, noise: 0.3, deform: 0, defScale: 90, pts: 2500, tolExp: 4, seed: 1, action: 3 };
+var PRESETS = [
+  { n: '1. The aperture problem',
+    s: { type: 'flat', base: 0, feat: 0 }, bench: [4, -3, 2] },
+  { n: '2. Texture rescues the plate',
+    s: { type: 'flat', base: 0, feat: 0, rough: 2.5, roughScale: 22 }, bench: [4, -3, 2] },
+  { n: '3. Tilting does not help',
+    s: { type: 'flat', base: 0.6, feat: 0, dim: 'x', sys: 3, rnd: 1.5 }, bench: [5, 0, 0] },
+  { n: '4. Chest wall — sup/inf blindness',
+    s: { type: 'cylinder', base: 1, feat: 0 }, bench: [0, 6, 0] },
+  { n: '5. The mound restores Y',
+    s: { type: 'breast', base: 1, feat: 1, rough: 0.6, roughScale: 35 }, bench: [0, 6, 0] },
+  { n: '6. Move the ROI off the mound',
+    s: { type: 'breast', base: 1, feat: 1, rough: 0.6, roughScale: 35, roi: 60, cx: -80 }, bench: [0, 6, 0] },
+  { n: '7. Face — fully constrained',
+    s: { type: 'face', base: 1, feat: 1, rough: 0.4, rnd: 1.5 }, bench: [3, -2, 1.5] },
+  { n: '8. Add real-world surface change',
+    s: { type: 'face', base: 1, feat: 1, rough: 0.4, deform: 2.0, defScale: 90 }, bench: [3, -2, 1.5] },
+  { n: '9. Breathing on a breast',
+    s: { type: 'breast', base: 1, feat: 1, rough: 0.6, deform: 2.5, defScale: 110 }, bench: [0, 3, 0] },
+  { n: '10. Blind axis and a moving surface',
+    s: { type: 'breast', base: 1, feat: 0, rough: 0, deform: 2.5, defScale: 110 }, bench: [0, 6, 0] }
+];
+(function () {
+  var host = $('#presets');
+  PRESETS.forEach(function (p) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.textContent = p.n;
+    b.addEventListener('click', function () { applyPreset(p); });
+    host.appendChild(b);
+  });
+})();
+function setRange(id, val) { var el = $(id); if (el) { el.value = String(val); el.dispatchEvent(new Event('input')); } }
+function applyPreset(p) {
+  var s = {}, key;
+  for (key in BASE_PRESET) if (Object.prototype.hasOwnProperty.call(BASE_PRESET, key)) s[key] = BASE_PRESET[key];
+  for (key in p.s) if (Object.prototype.hasOwnProperty.call(p.s, key)) s[key] = p.s[key];
+  if (s.type) {
+    S.type = s.type;
+    $$('.seg [data-surf]').forEach(function (o) { o.setAttribute('aria-pressed', String(o.dataset.surf === s.type)); });
+    updateSurfaceLabels();
+  }
+  if (s.dim) {
+    S.dim = s.dim;
+    $$('.seg [data-dim]').forEach(function (o) { o.setAttribute('aria-pressed', String(o.dataset.dim === s.dim)); });
+  }
+  suspend = true;
+  clearTimeout(heavyTimer); clearTimeout(benchTimer);
+  setRange('#sPts',s.pts); setRange('#sTol',s.tolExp); setRange('#sAction',s.action*10);
+  S.seed=s.seed; $('#sSeed').value=s.seed; $('#vSeed').textContent=String(s.seed);
+  if (s.base !== undefined) setRange('#sBase', Math.round(s.base * 100));
+  if (s.feat !== undefined) setRange('#sFeat', Math.round(s.feat * 100));
+  if (s.rough !== undefined) setRange('#sRough', Math.round(s.rough * 10));
+  if (s.roughScale !== undefined) setRange('#sRoughSc', Math.round(s.roughScale));
+  if (s.roi !== undefined) setRange('#sRoi', Math.round(s.roi / 5) * 5);
+  if (s.cx !== undefined) setRange('#sCx', Math.round(s.cx / 2) * 2);
+  if (s.cy !== undefined) setRange('#sCy', Math.round(s.cy / 2) * 2);
+  if (s.sys !== undefined) setRange('#sSys', Math.round(s.sys * 10));
+  if (s.rnd !== undefined) setRange('#sRnd', Math.round(s.rnd * 10));
+  if (s.fx !== undefined) setRange('#sFx', s.fx);
+  if (s.noise !== undefined) setRange('#sNoise', Math.round(s.noise * 100));
+  if (s.deform !== undefined) setRange('#sDeform', Math.round(s.deform * 100));
+  if (s.defScale !== undefined) setRange('#sDefSc', Math.round(s.defScale / 5) * 5);
+  if (p.bench) {
+    setRange('#bX', Math.round(p.bench[0] * 10));
+    setRange('#bY', Math.round(p.bench[1] * 10));
+    setRange('#bZ', Math.round(p.bench[2] * 10));
+  }
+  suspend = false;
+  refresh(true);
+}
+
+/* resize */
+var rt = null;
+window.addEventListener('resize', function () {
+  clearTimeout(rt);
+  rt = setTimeout(function () {
+    if ($('#advancedMode').hidden) return;
+    draw3D(); drawLandscape(); drawBench();
+    if (course) { drawApplied(); drawTime(); drawMag(); drawHist(); drawScatter(); }
+  }, 130);
+});
+
+/* boot */
+updateSurfaceLabels();
+refresh(true);
+
+/* expose for console tinkering / future metric work */
+window.SGRT = {
+  state: S, get ref() { return ref; }, get cond() { return cond; }, get metrics() { return metrics; },
+  get course() { return course; }, get bench() { return benchResult; }, refresh: refresh, applyPreset: applyPreset,
+
+  api: { buildReference: buildReference, registerICP: registerICP, sampleLive: sampleLive,
+         conditioning: conditioning, predictSigma: predictSigma, surfaceMetrics: surfaceMetrics,
+         costLandscape: costLandscape, pinvSym3: pinvSym3, mulberry32: mulberry32, makeGauss: makeGauss,
+         makeNoise: makeNoise, SURFACES: SURFACES }
+};
+
+})();
+</script>
+<script>
+(function(){
+'use strict';
+/* ============================================================================
+   Teaching mode. Five cases, each one relatable scenario and one take-home point.
+   All registration numbers come from the same core used by the Advanced mode.
+   ============================================================================ */
+const $=s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll(s));
+const A=window.SGRT.api;
+const C={ref:'#68dfca',live:'#ffc16b',other:'#b8a7ff',ink:'#d8ebf2',muted:'#95b0bf',grid:'#223e4e',
+         good:'#8fe07a',warn:'#ffc861',bad:'#ff7f6a',drop:'#62a8ff'};
+const D2R=180/Math.PI;
+const clamp=(v,lo,hi)=>v<lo?lo:v>hi?hi:v;
+const nf=(n,d=2)=>!Number.isFinite(n)?'—':(Math.abs(n)<.5*Math.pow(10,-d)?0:n).toFixed(d);
+const signed=(n,d=1)=>{const s=nf(n,d);return (Number(s)>0?'+':'')+s;};
+const mm=(v,d=1)=>nf(v,d)+' mm';
+const norm=v=>Math.hypot(v[0],v[1],v[2]);
+const AXN=['X · lateral','Y · longitudinal','Z · vertical'];
+const AXW=['lateral (X)','longitudinal (Y)','vertical (Z)'];
+
+/* Case order. Everything below refers to cases by name, never by number. */
+const K={FLAT:0,CHEST:1,FACE:2,LOCAL:3,NOISE:4};
+const isGeom=i=>i===K.FLAT||i===K.CHEST;
+
+/* ---------------------------------------------------------------- content */
+const LESSONS=[
+ {short:'Flat surface',sub:'A perfect fit can still miss motion',tag:'Start here · the basic limit',
+  title:'Can a perfect surface match hide a shift?',
+  scenario:'The ROI sits on a flat area — a flat abdomen, the back, or the top of a block phantom. The patient has been set up 5 mm too far to one side.',
+  question:'Move the surface in X, Y and Z, together or one at a time. Which movements does the registration find?',
+  tryText:'Keep X at 5 mm and add 3 mm of Z. Only the Z tile turns green. Drag upwards on the picture to look from the side and see the surface lift. Then press “After fitting”: the surfaces line up, yet the patient is still 5 mm out.',
+  take:'A flat ROI only measures height. Sideways (X) and head–foot (Y) motion are invisible to it — and the surface match still looks perfect.',
+  clinicalTitle:'Flat anatomy, flat phantoms',
+  clinical:'On a flat abdomen, back or block phantom, any shift along the surface cannot be observed. The surface-match number cannot warn you: the match really is perfect, the position is not.'},
+ {short:'Chest wall vs breast',sub:'Fewer features, less information',tag:'Anatomical features',
+  title:'Does the same ROI work on a chest wall and an intact breast?',
+  scenario:'Post-mastectomy, the chest wall has fewer surface features than an intact breast, so an ROI may not perform as well on one as on the other. Here the chest wall is modelled as a smooth curve; the intact breast adds a mound and an inframammary fold.',
+  question:'Apply a 5 mm head–foot (Y) shift, then switch between the post-mastectomy chest wall and the intact breast.',
+  tryText:'On the chest wall the Y tile is red: the 5 mm head–foot shift is not found. Switch to “Intact breast” and it turns green. An X shift is found on both, because both curve from side to side.',
+  take:'Fewer surface features means less information for the registration. An ROI that performs well on an intact breast may not perform comparably on a post-mastectomy chest wall — especially for head–foot motion.',
+  clinicalTitle:'Post-mastectomy chest wall',
+  clinical:'A real chest wall keeps some features — ribs, clavicles, sternum — but fewer than an intact breast. Where clinically appropriate, extend the ROI to include anatomy with more shape variation, and verify head–foot position with imaging.'},
+ {short:'Face: choosing the ROI',sub:'Contents matter more than size',tag:'ROI selection',
+  title:'Which part of the face should the ROI cover?',
+  scenario:'A cranial patient in an open-face mask. Each day the face is slightly different — mask pressure, swelling, expression — and the setup varies by a few millimetres.',
+  question:'Drag the ROI on the image, or use the sliders. Every ROI is tested on the same 20 simulated treatment days, so the numbers compare fairly.',
+  tryText:'Load “Forehead patch”, then “Nose only”: the nose ROI is smaller, yet the typical error roughly halves. Then try “Wide forehead” and “Nose & eyes”: more area helps, but more shape helps more.',
+  take:'Size helps, but what the ROI contains matters more. A smooth patch — even a large one — lets small everyday surface changes push the answer around. Include anatomy that changes shape in every direction: nose, brow, orbits, chin.',
+  clinicalTitle:'Open-face masks',
+  clinical:'Within the mask opening, prefer an ROI that includes distinctive features over a smooth forehead or cheek alone. The daily change here is deliberately large; real systems also solve rotations, which need even more varied shape.'},
+ {short:'Local change & ROI size',sub:'A large ROI averages it away',tag:'ROI size',
+  title:'Does a large ROI notice a local change?',
+  scenario:'The patient is in the right position, but one area of the surface has changed shape since the reference — for example local swelling, or the breast sitting slightly lower. The rest of the surface has not moved.',
+  question:'Change the ROI size. How much of the local change does the system report, and when is it flagged?',
+  tryText:'With a 5 mm local change and a 200 mm ROI the system reports under 2 mm — inside a 3 mm tolerance, so nothing is flagged. Shrink the ROI to 80 mm and the same change is flagged. Then choose “Whole surface moves”: every ROI size reports the full 5 mm.',
+  take:'The reported shift is an average over everything inside the ROI. A large ROI dilutes a local change with surface that has not moved; a small ROI over the changing area reports almost all of it. Small ROIs are sensitive — useful when that area matters, but quick to react to any local change.',
+  clinicalTitle:'Choosing ROI size',
+  clinical:'An ROI that spreads onto areas that move less — the other side of the chest, the neck, the arms — can hide a local change, so the effective tolerance is wider than the one you set. A small ROI over the treated area is more sensitive: to real change, and also to local surface variation that may not reflect target position.'},
+ {short:'Noise vs calibration',sub:'More points fix noise, not offsets',tag:'Precision is not accuracy',
+  title:'Can more camera points fix a calibration error?',
+  scenario:'A flat phantom is set up exactly at the reference position. The camera measures every point with a little random noise, and its calibration has drifted so that every point reads 2 mm too high.',
+  question:'Change the number of points per measurement. Do the repeat measurements get closer to the true surface?',
+  tryText:'At 10 points the repeat measurements scatter widely. At 1000 they agree closely — but all about 2 mm too high. Set the calibration offset to 0 and they settle on the true surface instead.',
+  take:'More points average out random noise, so repeat measurements agree more closely. A calibration offset moves every point the same way, so it stays in the answer however many points are used. Only QA against a known reference can find it.',
+  clinicalTitle:'Why SGRT QA matters',
+  clinical:'Repeatable readings on the console do not prove the camera is accurate. Phantom QA at a known position — daily, periodic, and after camera service — is what detects calibration drift. The registration itself cannot see it.'}
+];
+
+const POINT_STEPS=[10,30,100,300,1000,3000,10000];
+const DEFAULTS=[
+ {sx:5,sy:0,sz:0,phase:'before'},
+ {sx:0,sy:5,sz:0,feature:0,phase:'before'},
+ {preset:'forehead',cx:0,cy:78,w:70,h:40,change:1.0},
+ {mode:'local',drop:5,size:200,gate:3},
+ {pidx:2,noise:1.5,bias:2}
+];
+const VIEWS=[
+ [['3d','3D'],['cutx','Cut left–right'],['cuty','Cut head–foot']],
+ [['3d','3D'],['cutx','Cut left–right'],['cuty','Cut head–foot']],
+ [['3d','3D'],['top','Top view']],
+ [['3d','3D'],['profile','Change profile']],
+ []
+];
+
+/* ---------------------------------------------------------------- shared measures */
+/* Topography inside an ROI. Height SD is what most people reach for first; the angle
+   change along each direction is what registration actually depends on. */
+function topography(ref){
+  const N=ref.N, e=Math.max(1,Math.min(2,Math.floor((N-3)/2)));
+  let n=0,sx=0,sy=0,sz=0,qx=0,qy=0,qz=0;
+  for(let j=e;j<N-e;j++)for(let i=e;i<N-e;i++){
+    const k=j*N+i, ax=Math.atan(ref.hx[k])*D2R, ay=Math.atan(ref.hy[k])*D2R, z=ref.z[k];
+    sx+=ax;qx+=ax*ax;sy+=ay;qy+=ay*ay;sz+=z;qz+=z*z;n++;
+  }
+  const sd=(s,q)=>Math.sqrt(Math.max(0,q/n-(s/n)*(s/n)));
+  return {angX:sd(sx,qx),angY:sd(sy,qy),hSD:sd(sz,qz)};
+}
+function angleClass(v){return v<1?'none':v<15?'weak':'good';}
+function angleTag(v){return v<1?'no information':v<15?'weak':'good';}
+
+/* ---------------------------------------------------------------- cases 1–2: geometry */
+const GEOM={
+ [K.FLAT]: {roi:{cx:0,cy:0,w:140,h:140},box:[-110,110,-110,110],yaw:-.5,pitch:.74},
+ [K.CHEST]:{roi:{cx:10,cy:0,w:180,h:180},box:[-125,145,-130,130],yaw:-.42,pitch:.8}
+};
+const LOCAL_VIEW={yaw:-.4,pitch:.82};
+function defaultAngles(i){return isGeom(i)?{yaw:GEOM[i].yaw,pitch:GEOM[i].pitch}:i===K.LOCAL?{...LOCAL_VIEW}:{yaw:0,pitch:.8};}
+const canRotate=()=>state.camera==='3d'&&(isGeom(state.caseIndex)||state.caseIndex===K.LOCAL);
+
+function geomCfg(s){
+  const g=GEOM[s.caseIndex].roi;
+  const c={type:'flat',base:0,feat:0,roughAmp:0,roughScale:30,roughSeed:20240517,grid:81,Lx:g.w,Ly:g.h,cx:g.cx,cy:g.cy};
+  if(s.caseIndex===K.CHEST){c.type=s.feature?'breast':'cylinder';c.base=1;c.feat=s.feature?1:0;}
+  return c;
+}
+/* Noise-free point-to-plane mismatch over the common overlap, as the camera would see it. */
+function mismatch(ref,shift){
+  let sum=0,n=0;
+  for(let j=4;j<ref.N-4;j+=2)for(let i=4;i<ref.N-4;i+=2){
+    const x=ref.x0+i*ref.dx,y=ref.y0+j*ref.dy,ux=x-shift[0],uy=y-shift[1];
+    if(ux<ref.x0||ux>ref.x0+ref.Lx||uy<ref.y0||uy>ref.y0+ref.Ly)continue;
+    const v=(ref.H(ux,uy)+shift[2]-ref.H(x,y))*ref.nz[j*ref.N+i];sum+=v*v;n++;
+  }
+  return n?Math.sqrt(sum/n):NaN;
+}
+function solveGeometry(){
+  const cfg=geomCfg(state),ref=A.buildReference(cfg),rng=A.mulberry32(7103),pts=A.sampleLive(ref,1500,rng);
+  const t=[state.sx,state.sy,state.sz];
+  for(let p=0;p<pts.length;p+=3){pts[p]+=t[0];pts[p+1]+=t[1];pts[p+2]+=t[2];}
+  const fit=A.registerICP(ref,pts,{tol:1e-4,iters:80});
+  const det=fit.detected.slice(), residual=t.map((v,k)=>v-det[k]);
+  return {kind:'geometry',cfg,ref,roi:GEOM[state.caseIndex].roi,truth:t,det,residual,fit,
+          topo:topography(ref),before:mismatch(ref,t),after:mismatch(ref,residual)};
+}
+
+/* ---------------------------------------------------------------- case 3: face ROI over 20 days */
+const FACE={a:96,b:122,qmin:0.12,box:[-112,112,-138,138],days:20,noise:0.5,setup:3,scale:60,density:16};
+const FACE_PRESETS=[
+ {id:'forehead',name:'Forehead patch',cx:0,cy:78,w:70,h:40},
+ {id:'wideforehead',name:'Wide forehead',cx:0,cy:62,w:120,h:46},
+ {id:'cheek',name:'Cheek',cx:-50,cy:-8,w:50,h:50},
+ {id:'nose',name:'Nose only',cx:0,cy:-5,w:40,h:50},
+ {id:'noseeyes',name:'Nose & eyes',cx:0,cy:12,w:90,h:80},
+ {id:'whole',name:'Whole face',cx:0,cy:0,w:124,h:160}
+];
+/* Keep the ROI on the face. The synthetic head ends in a vertical cliff that a camera could
+   not see and that would masquerade as a feature, so every corner stays inside the face. */
+function faceFits(cx,cy,w,h){
+  for(const sx of[-1,1])for(const sy of[-1,1]){const x=cx+sx*w/2,y=cy+sy*h/2;
+    if(1-(x/FACE.a)*(x/FACE.a)-(y/FACE.b)*(y/FACE.b)<FACE.qmin)return false;}
+  return true;
+}
+function constrainRoi(prev,next){
+  let {cx,cy,w,h}=next;
+  w=clamp(w,30,180);h=clamp(h,30,220);
+  if(!faceFits(0,0,w,h)){let lo=0,hi=1;for(let i=0;i<30;i++){const m=(lo+hi)/2;faceFits(0,0,w*m,h*m)?lo=m:hi=m;}w*=lo;h*=lo;}
+  if(faceFits(cx,cy,w,h))return {cx,cy,w,h};
+  if(faceFits(cx,prev.cy,w,h))return {cx,cy:prev.cy,w,h};
+  if(faceFits(prev.cx,cy,w,h))return {cx:prev.cx,cy,w,h};
+  const px=faceFits(prev.cx,prev.cy,w,h)?prev.cx:0, py=faceFits(prev.cx,prev.cy,w,h)?prev.cy:0;
+  let lo=0,hi=1;for(let i=0;i<30;i++){const m=(lo+hi)/2;faceFits(px+(cx-px)*m,py+(cy-py)*m,w,h)?lo=m:hi=m;}
+  return {cx:px+(cx-px)*lo,cy:py+(cy-py)*lo,w,h};
+}
+function faceRef(r){
+  const N=clamp(Math.round(Math.max(r.w,r.h)/2.5)+1,31,81);
+  return A.buildReference({type:'face',base:1,feat:1,roughAmp:0,roughScale:30,roughSeed:20240517,grid:N,Lx:r.w,Ly:r.h,cx:r.cx,cy:r.cy});
+}
+/* The same 20 days for every ROI: a random setup error and a smooth surface change whose
+   RMS over the face equals the slider value. */
+let dayCache=null;
+function faceDays(change){
+  if(dayCache&&dayCache.change===change)return dayCache.days;
+  const days=[];
+  for(let d=0;d<FACE.days;d++){
+    const rng=A.mulberry32(5000+d*977),gs=A.makeGauss(rng);
+    const t=[gs()*FACE.setup,gs()*FACE.setup,gs()*FACE.setup];
+    const field=A.makeNoise(9000+d*131);let s=0,c=0;
+    for(let y=-110;y<=110;y+=10)for(let x=-90;x<=90;x+=10){const v=field(x,y,FACE.scale);s+=v*v;c++;}
+    const k=change>0?change/Math.sqrt(s/c):0;
+    days.push({t,f:(x,y)=>k*field(x,y,FACE.scale)});
+  }
+  dayCache={change,days};return days;
+}
+function simulateFace(r,change){
+  const ref=faceRef(r),days=faceDays(change);
+  const want=clamp(Math.round(r.w*r.h/FACE.density),80,2600);
+  const err=[[],[],[]],mag=[];let fails=0,count=0;
+  days.forEach((day,d)=>{
+    const rng=A.mulberry32(31000+d*613),gs=A.makeGauss(rng);
+    const L=A.sampleLive(ref,want,rng);count=L.length/3;
+    for(let p=0;p<L.length;p+=3){const x=L[p],y=L[p+1];L[p]+=day.t[0];L[p+1]+=day.t[1];L[p+2]+=day.t[2]+day.f(x,y)+gs()*FACE.noise;}
+    const fit=A.registerICP(ref,L,{tol:1e-4,iters:50});if(fit.failed)fails++;
+    const e=[0,1,2].map(k=>day.t[k]-fit.detected[k]);e.forEach((v,k)=>err[k].push(v));mag.push(norm(e));
+  });
+  const rms=a=>Math.sqrt(a.reduce((s,v)=>s+v*v,0)/a.length);
+  return {pts:count,ax:err.map(rms),typical:rms(mag),worst:Math.max(...mag),fails};
+}
+const faceCache=new Map(), topoCache=new Map();
+let faceJobs=[],facePump=null;
+const roiKey=r=>[r.cx,r.cy,r.w,r.h].map(v=>Math.round(v)).join(',');
+const faceKey=(r,c)=>roiKey(r)+'|'+c;
+function faceTopo(r){const k=roiKey(r);if(!topoCache.has(k))topoCache.set(k,topography(faceRef(r)));return topoCache.get(k);}
+function queueFace(r,priority){
+  const k=faceKey(r,state.change);if(faceCache.has(k))return;
+  faceJobs=faceJobs.filter(j=>j.preset&&j.k!==k);
+  const job={k,r:{cx:r.cx,cy:r.cy,w:r.w,h:r.h},c:state.change,preset:!priority};
+  priority?faceJobs.unshift(job):faceJobs.push(job);
+  clearTimeout(facePump);facePump=setTimeout(pumpFace,priority?110:40);
+}
+function pumpFace(){
+  facePump=null;const job=faceJobs.shift();if(!job)return;
+  if(!faceCache.has(job.k)){
+    if(faceCache.size>300)faceCache.clear();
+    faceCache.set(job.k,simulateFace(job.r,job.c));
+  }
+  if(state.caseIndex===K.FACE&&mode==='simple')update(true);
+  if(faceJobs.length&&!facePump)facePump=setTimeout(pumpFace,0);
+}
+function queuePresets(){FACE_PRESETS.forEach(p=>{const k=faceKey(p,state.change);if(!faceCache.has(k)&&!faceJobs.some(j=>j.k===k))faceJobs.push({k,r:p,c:state.change,preset:true});});
+  if(!facePump&&faceJobs.length)facePump=setTimeout(pumpFace,40);}
+function errClass(v){return v<1.25?'good':v<2.5?'warn':'bad';}
+
+/* ---------------------------------------------------------------- case 4: local change and ROI size */
+const LC={cx:22,cy:0,sigma:50,box:[-125,165,-140,140]};
+const lcCache=new Map();
+/* Fraction of a local change, peaked at the breast, that a square ROI centred on it reports. */
+function localFraction(size,m){
+  if(m==='rigid')return 1;
+  if(lcCache.has(size))return lcCache.get(size);
+  const ref=A.buildReference({type:'breast',base:1,feat:1,roughAmp:0,roughScale:30,roughSeed:1,grid:61,Lx:size,Ly:size,cx:LC.cx,cy:LC.cy});
+  let sw=0,s=0;
+  for(let j=2;j<ref.N-2;j++)for(let i=2;i<ref.N-2;i++){
+    const k=j*ref.N+i,x=ref.x0+i*ref.dx,y=ref.y0+j*ref.dy,w=ref.nz[k]*ref.nz[k];
+    sw+=w;s+=w*Math.exp(-((x-LC.cx)**2+(y-LC.cy)**2)/(2*LC.sigma*LC.sigma));
+  }
+  lcCache.set(size,s/sw);return s/sw;
+}
+function localChange(x,y){return state.mode==='rigid'?state.drop:state.drop*Math.exp(-((x-LC.cx)**2+(y-LC.cy)**2)/(2*LC.sigma*LC.sigma));}
+const breastH=(()=>{const r=A.buildReference({type:'breast',base:1,feat:1,roughAmp:0,roughScale:30,roughSeed:1,grid:5,Lx:10,Ly:10,cx:0,cy:0});return r.H;})();
+
+/* ---------------------------------------------------------------- case 5: noise vs calibration */
+const NZ={xs:null,gs:null,rep:null,repeats:20};
+(function(){
+  const rng=A.mulberry32(424242),gs=A.makeGauss(rng);
+  NZ.xs=new Float64Array(10000);NZ.gs=new Float64Array(10000);
+  for(let i=0;i<10000;i++){NZ.xs[i]=-100+200*rng();NZ.gs[i]=gs();}
+  const r2=A.makeGauss(A.mulberry32(777));NZ.rep=Array.from({length:NZ.repeats},()=>r2());
+})();
+function noiseResult(){
+  const N=POINT_STEPS[state.pidx],sd=state.noise/Math.sqrt(N);
+  return {kind:'noise',N,sd,bias:state.bias,typical:Math.sqrt(state.bias*state.bias+sd*sd),
+          repeats:NZ.rep.map(g=>state.bias+sd*g)};
+}
+
+/* ---------------------------------------------------------------- state & controls */
+let state={caseIndex:0,camera:'3d',...defaultAngles(0),...DEFAULTS[0]}, result=null, renderTimer=null, mode='simple', lastView=null;
+
+function group(label,body,help=''){return '<div class="control-group">'+label+body+(help?'<p class="control-help">'+help+'</p>':'')+'</div>';}
+function fmtOut(key,v){
+  if(key==='pidx')return POINT_STEPS[v].toLocaleString('en-GB');
+  if(key==='size'||key==='w'||key==='h'||key==='cx'||key==='cy')return (key==='cx'||key==='cy')&&v>0?'+'+nf(v,0)+' mm':nf(v,0)+' mm';
+  if(key==='gate')return '±'+nf(v,1)+' mm';
+  if(key==='sx'||key==='sy'||key==='sz')return signed(v,1)+' mm';
+  return nf(v,key==='change'?2:1)+' mm';
+}
+function slider(key,label,min,max,step,help=''){
+  return group('<label for="teach-'+key+'">'+label+'<output id="out-'+key+'" for="teach-'+key+'">'+fmtOut(key,state[key])+'</output></label>',
+    '<input id="teach-'+key+'" data-key="'+key+'" type="range" min="'+min+'" max="'+max+'" step="'+step+'" value="'+state[key]+'">',help);
+}
+function choices(key,label,opts){
+  return group('<label>'+label+'</label>','<div class="mini-tabs" role="group" aria-label="'+label+'">'+
+    opts.map(([v,t])=>'<button data-choice="'+key+'" data-value="'+v+'" aria-pressed="'+(String(state[key])===String(v))+'">'+t+'</button>').join('')+'</div>');
+}
+const dropLabel=()=>state.mode==='rigid'?'Whole surface moves by':'Local change (depth at centre)';
+function buildSettings(){
+  const i=state.caseIndex,l=LESSONS[i];let h='';
+  if(isGeom(i)){
+    h+='<div class="section-label">Move the patient</div>';
+    h+=slider('sx','X · lateral (left–right)',-10,10,.1);
+    h+=slider('sy','Y · longitudinal (head–foot)',-10,10,.1);
+    h+=slider('sz','Z · vertical (height)',-10,10,.1);
+    if(i===K.CHEST)h+=choices('feature','Anatomy',[[0,'Post-mastectomy chest wall'],[1,'Intact breast']]);
+    h+=choices('phase','Show the live surface',[['before','Before fitting'],['after','After fitting']]);
+  }else if(i===K.FACE){
+    h+=group('<label>ROI examples</label>','<div class="mini-tabs preset-grid" role="group" aria-label="ROI examples">'+
+      FACE_PRESETS.map(p=>'<button data-preset="'+p.id+'" aria-pressed="'+(state.preset===p.id)+'">'+p.name+'</button>').join('')+'</div>',
+      'Or drag the ROI on the image.');
+    h+=slider('cx','ROI position · left–right',-80,80,2);
+    h+=slider('cy','ROI position · head–foot',-100,100,2);
+    h+=slider('w','ROI width (left–right)',30,180,2);
+    h+=slider('h','ROI height (head–foot)',30,220,2,'The ROI is kept on the face; it shrinks or stops at the edge.');
+    h+=slider('change','Daily surface change (RMS)',0,2,.25,'0 = the face is identical every day; only camera noise remains.');
+  }else if(i===K.LOCAL){
+    h+=choices('mode','What changes?',[['local','Local change'],['rigid','Whole surface moves']]);
+    h+=slider('drop',dropLabel(),0,8,.5);
+    h+=slider('size','ROI size (square)',40,240,10);
+    h+=slider('gate','Tolerance',1,5,.5);
+  }else{
+    h+=slider('pidx','Points per measurement',0,POINT_STEPS.length-1,1);
+    h+=slider('noise','Random noise per point (1 SD)',0,3,.1);
+    h+=slider('bias','Calibration offset',0,4,.2,'Every point reads this much too high.');
+  }
+  $('#tryBox').innerHTML='<strong>Try this</strong>'+l.tryText;
+  h+='<div class="small-actions"><button id="resetCase">Reset case</button>'+(isGeom(i)?'<button id="zeroShift">Zero all shifts</button>':'')+'</div>';
+  $('#lessonSettings').innerHTML=h;
+  $('#resetCase').onclick=()=>selectCase(i);
+  if(isGeom(i))$('#zeroShift').onclick=()=>{state.sx=state.sy=state.sz=0;buildSettings();update();};
+  $$('#lessonSettings [data-key]').forEach(el=>el.oninput=()=>{
+    const k=el.dataset.key;let v=Number(el.value);
+    if(i===K.FACE&&['cx','cy','w','h'].includes(k)){
+      const prev={cx:state.cx,cy:state.cy,w:state.w,h:state.h},next={...prev,[k]:v};
+      Object.assign(state,constrainRoi(prev,next));state.preset=null;syncRoiControls();
+    }else{state[k]=v;$('#out-'+k).textContent=fmtOut(k,v);}
+    if(k==='change'){queuePresets();}
+    clearTimeout(renderTimer);renderTimer=setTimeout(update,25);
+  });
+  $$('#lessonSettings [data-choice]').forEach(b=>b.onclick=()=>{
+    const k=b.dataset.choice;state[k]=k==='feature'?Number(b.dataset.value):b.dataset.value;
+    $$('#lessonSettings [data-choice="'+k+'"]').forEach(o=>o.setAttribute('aria-pressed',String(o===b)));
+    if(k==='mode'){const lab=$('label[for="teach-drop"]');if(lab)lab.firstChild.textContent=dropLabel();}
+    update();
+  });
+  $$('#lessonSettings [data-preset]').forEach(b=>b.onclick=()=>loadPreset(b.dataset.preset));
+}
+function syncRoiControls(){
+  ['cx','cy','w','h'].forEach(k=>{const el=$('#teach-'+k);if(el){el.value=state[k];$('#out-'+k).textContent=fmtOut(k,state[k]);}});
+  $$('#lessonSettings [data-preset]').forEach(o=>o.setAttribute('aria-pressed',String(o.dataset.preset===state.preset)));
+}
+function loadPreset(id){
+  const p=FACE_PRESETS.find(q=>q.id===id);if(!p)return;
+  Object.assign(state,{cx:p.cx,cy:p.cy,w:p.w,h:p.h,preset:id});syncRoiControls();update();
+}
+
+/* ---------------------------------------------------------------- readouts */
+function tile(label,value,sub,cls='',badge=''){
+  return '<div class="reading '+cls+'"><div class="label">'+label+(badge?'<span class="badge">'+badge+'</span>':'')+'</div><div class="value">'+value+'</div><div class="sub">'+sub+'</div></div>';
+}
+function axisTile(k,applied,found){
+  const left=applied-found,a=Math.abs(applied),f=Math.abs(found),l=Math.abs(left);
+  let cls,badge;
+  if(a<.05&&f<.1){cls='idle';badge='no motion';}
+  else if(a<.05){cls='bad';badge='false shift';}
+  else if(l<.25){cls='good';badge='found';}
+  else if(f<.1*a){cls='bad';badge='not seen';}
+  else{cls='warn';badge='partly found';}
+  const sub='applied '+signed(applied,1)+' · system found '+signed(found,1)+'<br>'+(cls==='idle'?'nothing to find':'error left after correction');
+  return tile(AXN[k],cls==='idle'?'0.0 mm':mm(l,1),sub,cls,badge);
+}
+function topoStrip(t,intro){
+  const cell=(label,val,unit,frac,cls,tag)=>'<div class="topo-cell '+cls+'"><div class="topo-label">'+label+'</div><div class="topo-val">'+val+'<small>'+unit+'</small>'+
+    (tag?'<span class="topo-tag">'+tag+'</span>':'')+'</div><div class="topo-bar"><i style="width:'+(clamp(frac,0,1)*100).toFixed(1)+'%"></i></div></div>';
+  return '<div class="topo-strip"><div class="topo-intro"><b>Topography inside the ROI</b><span>'+intro+'</span></div>'+
+    cell('Height variation (SD)',nf(t.hSD,1),'mm',t.hSD/25,'','')+
+    cell('Angle change along X · lateral',nf(t.angX,1),'°',t.angX/40,angleClass(t.angX),angleTag(t.angX))+
+    cell('Angle change along Y · longitudinal',nf(t.angY,1),'°',t.angY/40,angleClass(t.angY),angleTag(t.angY))+'</div>';
+}
+const TOPO_INTRO='To detect motion in a direction, the surface angle must change as you move across the ROI in that direction. Height variation alone can mislead. Z is measured wherever the surface faces the camera.';
+
+function compareHTML(){
+  const cur={cx:state.cx,cy:state.cy,w:state.w,h:state.h};
+  const curKey=roiKey(cur);
+  const rows=FACE_PRESETS.map(p=>({name:p.name,id:p.id,r:p,current:roiKey(p)===curKey}));
+  if(!rows.some(r=>r.current))rows.push({name:'Your ROI',id:'',r:cur,current:true});
+  const vals=rows.map(r=>faceCache.get(faceKey(r.r,state.change)));
+  const max=Math.max(4,...vals.filter(Boolean).map(v=>v.typical*1.1));
+  return '<div class="compare"><div class="compare-head"><b>Compare ROIs on the same 20 days</b><span>Click a row to load it</span></div>'+
+    '<div class="cmp-row cmp-header" aria-hidden="true"><span>ROI</span><span>Angle change</span><span>Typical 3D error after correction</span><span></span></div>'+
+    rows.map((row,i)=>{const v=vals[i],t=faceTopo(row.r);
+      return '<button class="cmp-row'+(row.current?' current':'')+'"'+(row.id?' data-preset="'+row.id+'"':'')+'>'+
+        '<span class="cmp-name">'+row.name+'<small>'+Math.round(row.r.w)+' × '+Math.round(row.r.h)+' mm</small></span>'+
+        '<span class="cmp-topo">X '+nf(t.angX,0)+'° · Y '+nf(t.angY,0)+'°</span>'+
+        '<span class="cmp-bar"><i class="'+(v?errClass(v.typical):'pending')+'" style="width:'+(v?clamp(v.typical/max,0.02,1)*100:100).toFixed(1)+'%"></i></span>'+
+        '<span class="cmp-val">'+(v?mm(v.typical,1):'…')+'</span></button>';}).join('')+'</div>';
+}
+
+/* ---------------------------------------------------------------- update */
+function update(fromPump){
+  clearTimeout(renderTimer);
+  const i=state.caseIndex;let tiles='',extra='',title='',text='',method='';
+  if(isGeom(i)){
+    const r=result=solveGeometry();
+    tiles=[0,1,2].map(k=>axisTile(k,r.truth[k],r.det[k])).join('')+
+      tile('Surface match after fitting',mm(r.after,2),r.after<.05?'Looks perfect to the system':'A mismatch the system can see',r.after<.05?'teal':'emphasis');
+    extra=topoStrip(r.topo,TOPO_INTRO);
+    [title,text]=noticeGeometry(r);
+    method=methodGeometry(r);
+  }else if(i===K.FACE){
+    const roi={cx:state.cx,cy:state.cy,w:state.w,h:state.h},t=faceTopo(roi),v=faceCache.get(faceKey(roi,state.change));
+    if(!v)queueFace(roi,true);
+    if(!fromPump)queuePresets();
+    result={kind:'face',roi,topo:t,sim:v};
+    const weakAx=t.angY<t.angX?1:0,weak=Math.min(t.angX,t.angY);
+    tiles=v?tile('Typical position error',mm(v.typical,1),'3D, over 20 days · X '+nf(v.ax[0],1)+' · Y '+nf(v.ax[1],1)+' · Z '+nf(v.ax[2],1)+' mm',errClass(v.typical))
+           :tile('Typical position error','…','working out 20 days','pending');
+    tiles+=v?tile('Worst day',mm(v.worst,1),'largest 3D error left on any day',errClass(v.worst/1.6))
+            :tile('Worst day','…','','pending');
+    tiles+=tile('ROI size',Math.round(roi.w)+' × '+Math.round(roi.h)+'<small>mm</small>',(v?v.pts:Math.round(roi.w*roi.h/FACE.density))+' surface points','idle');
+    tiles+=tile('Weakest direction',weakAx?'Y · head–foot':'X · left–right','angle change '+nf(weak,1)+'°','word '+(angleClass(weak)==='good'?'good':angleClass(weak)==='weak'?'warn':'bad'),angleTag(weak));
+    extra=topoStrip(t,TOPO_INTRO)+compareHTML();
+    [title,text]=noticeFace(roi,t,v);
+    method=methodFace();
+  }else if(i===K.LOCAL){
+    const frac=localFraction(state.size,state.mode),rep=state.drop*frac,real=state.drop>state.gate+1e-9,flag=rep>state.gate+1e-9;
+    result={kind:'local',frac,rep};
+    const rigid=state.mode==='rigid';
+    tiles=tile(rigid?'Whole surface moved':'Local change at its centre',mm(state.drop,1),rigid?'every point moved by this':'largest change; less further out')+
+      tile('Reported by this ROI',mm(rep,1),state.size+' × '+state.size+' mm ROI · vertical','teal')+
+      tile('Change seen by the ROI',nf(frac*100,0)+'<small>%</small>','of the true change',frac>.8?'good':frac>.5?'warn':'bad')+
+      tile('Tolerance check',flag?'Flagged':'Not flagged',flag?'reported change exceeds ±'+nf(state.gate,1)+' mm':real?'real change exceeds ±'+nf(state.gate,1)+' mm, but is averaged away':'within ±'+nf(state.gate,1)+' mm',
+        'word '+(flag?'good':real?'bad':'idle'),flag?'detected':real?'missed':'ok');
+    extra='<div class="extra-chart"><div class="chart-head"><b>Reported change against ROI size</b><span>Same '+mm(state.drop,1)+' '+(rigid?'whole-surface movement':'local change')+'; the dot is your ROI</span></div><canvas id="extraCanvas" width="900" height="210" aria-label="Reported change against ROI size"></canvas></div>';
+    [title,text]=noticeLocal(frac,rep,real,flag);
+    method=methodLocal();
+  }else{
+    const r=result=noiseResult();
+    tiles=tile('Points per measurement',r.N.toLocaleString('en-GB'),'each measurement averages this many','idle')+
+      tile('Spread between repeats',mm(r.sd,2),'1 SD · noise ÷ √points · shrinks with more points',r.sd<.2?'good':r.sd<.6?'warn':'bad')+
+      tile('Offset in every measurement',mm(r.bias,1),'calibration offset · does not shrink',r.bias<.05?'good':r.bias<.6?'warn':'bad')+
+      tile('Typical error vs the truth',mm(r.typical,2),'spread and offset combined',r.typical<.3?'good':r.typical<1?'warn':'bad');
+    extra='<div class="extra-chart"><div class="chart-head"><b>What more points change</b><span>The dot is your setting</span></div><canvas id="extraCanvas" width="900" height="210" aria-label="Spread and offset against number of points"></canvas></div>';
+    [title,text]=noticeNoise(r);
+    method=methodNoise(r);
+  }
+  $('#lessonReadings').innerHTML=tiles;
+  $('#lessonExtra').innerHTML=extra;
+  $('#observationTitle').textContent=title;$('#observationText').textContent=text;
+  $('#lessonMethod').innerHTML=method;
+  if(i===K.FACE)$$('#lessonExtra [data-preset]').forEach(b=>b.onclick=()=>loadPreset(b.dataset.preset));
+  sceneText();draw();
+}
+
+/* ---------------------------------------------------------------- what to notice */
+function noticeGeometry(r){
+  const i=state.caseIndex,t=r.truth,res=norm(r.residual);
+  if(norm(t)<.05)return ['No movement is applied.','Move one or more sliders to shift the patient, then see which directions the registration can find.'];
+  if(i===K.FLAT){
+    const missed=[0,1].filter(k=>Math.abs(t[k])>.05).map(k=>AXW[k]);
+    if(!missed.length)return ['Height is found exactly.','Moving perpendicular to the plane opens a gap the fit can measure. Now add some X or Y movement and watch those tiles.'];
+    return ['A perfect match, but '+mm(res,1)+' of motion is left.',(Math.abs(t[2])>.05?'The vertical shift is found exactly. ':'')+'The '+missed.join(' and ')+' movement slides the plane along itself, so nothing about the surface changes. The system reports zero for it — and the surface match after fitting is '+mm(r.after,2)+'.'];
+  }
+  const missY=!state.feature&&Math.abs(t[1])>.05;
+  if(missY)return ['Head–foot motion is not found on the chest wall.','The simulated chest wall has no features that change head–foot, so a '+mm(Math.abs(t[1]),1)+' head–foot shift leaves the surface the camera sees unchanged. Switch to “Intact breast”: the mound and fold give the registration something to lock on to.'];
+  if(res<.25)return [state.feature?'All three directions are found.':'Lateral and vertical motion are found.',state.feature?'The breast mound and fold change shape head–foot, so Y is found as well as X and Z. Compare the “Angle change along Y” meter with the chest wall.':'The chest wall still curves from side to side, so X and Z are found. Try a head–foot shift to see where it falls short.'];
+  return ['Part of the motion is left.',mm(res,1)+' of the applied shift is not found.'];
+}
+function noticeFace(roi,t,v){
+  if(!v)return ['Working out 20 treatment days…','Each day applies a random setup error and a small change to the face, then registers this ROI. The topography meters below update immediately.'];
+  const best=FACE_PRESETS.map(p=>({p,v:faceCache.get(faceKey(p,state.change))})).filter(o=>o.v).sort((a,b)=>a.v.typical-b.v.typical)[0];
+  if(state.change===0)return ['With no daily change only camera noise remains.','Every ROI does reasonably well here, so the differences are small. Raise the day-to-day change to see why ROI contents matter.'];
+  const weakAx=t.angY<t.angX?'head–foot':'left–right';
+  let txt='This '+Math.round(roi.w)+' × '+Math.round(roi.h)+' mm ROI has '+v.pts+' surface points and its weakest direction is '+weakAx+' ('+nf(Math.min(t.angX,t.angY),1)+'° of angle change). The same daily surface changes leave a typical error of '+mm(v.typical,1)+'.';
+  if(best&&best.v.typical<v.typical*.8)txt+=' “'+best.p.name+'” gives '+mm(best.v.typical,1)+' on the same days.';
+  const head=v.typical<1.25?'This ROI holds enough shape to resist daily change.':v.typical<2.5?'This ROI is only moderately constrained.':'Too little shape: everyday change pushes the answer around.';
+  return [head,txt];
+}
+function noticeLocal(frac,rep,real,flag){
+  if(state.mode==='rigid')return ['Whole-surface movement is reported in full, at every ROI size.','When everything moves together there is no unchanged surface to dilute it, so the reported '+mm(rep,1)+' equals the true movement whatever the ROI size.'];
+  if(state.drop===0)return ['Nothing has changed.','Increase the local change to see how much of it this ROI reports.'];
+  const pct=nf(frac*100,0)+'%';
+  if(real&&!flag)return ['A real change, averaged away.','The surface has changed by '+mm(state.drop,1)+' at its centre, beyond the ±'+nf(state.gate,1)+' mm tolerance. This ROI averages it with surface that has not moved and reports only '+mm(rep,1)+' ('+pct+'). Shrink the ROI towards the change and watch it get flagged.'];
+  if(flag)return ['The change is flagged.','This ROI is concentrated on the changed area, so it reports '+mm(rep,1)+' of the '+mm(state.drop,1)+' change ('+pct+'). Now enlarge the ROI and find the size at which the change goes unnoticed.'];
+  return ['Within tolerance.','The surface has changed by '+mm(state.drop,1)+' at its centre, inside the ±'+nf(state.gate,1)+' mm tolerance. This ROI sees '+pct+' of it. Increase the change past the tolerance to test the ROI.'];
+}
+function noticeNoise(r){
+  const n=r.N.toLocaleString('en-GB');
+  if(r.bias<.05)return ['No offset: more points means a better answer.','With the calibration correct, the only error is random noise. Each measurement averages '+n+' points, so repeats agree to within about ±'+mm(r.sd,2)+' — all centred on the true surface.'];
+  if(r.N<=30)return ['Few points: the repeats disagree.','With only '+n+' points per measurement, repeat measurements scatter by about ±'+mm(r.sd,2)+'. Add more points and watch them close in — around the wrong height.'];
+  return ['Repeatable, but '+mm(r.bias,1)+' too high.','With '+n+' points per measurement the repeats agree to within about ±'+mm(r.sd,2)+', yet every one sits '+mm(r.bias,1)+' above the true surface. Adding points cannot remove an offset that every point shares.'];
+}
+
+/* ---------------------------------------------------------------- method notes */
+function tbl(head,rows){return '<div class="tblwrap"><table><thead><tr>'+head.map(v=>'<th>'+v+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(v=>'<td>'+v+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>';}
+function methodGeometry(r){
+  let m='<p><b>Geometry-only experiment.</b> Synthetic surface; translations only; no camera noise, deformation or rotations. The ROI ('+r.roi.w+' × '+r.roi.h+' mm) is the reference surface; about 1500 live points are sampled independently inside it and moved by the applied shift. Point-to-plane ICP with a relative eigenvalue cut-off of 10⁻⁴ returns zero for any direction it cannot resolve. The marker, arrows and surface edges are drawn to show the true motion; the registration never uses them.</p>';
+  m+=tbl(['mm','X · lateral','Y · longitudinal','Z · vertical'],[['Applied',...r.truth.map(v=>signed(v,2))],['Reported',...r.det.map(v=>signed(v,2))],['Left after correction',...r.residual.map(v=>signed(v,2))]]);
+  m+=tbl(['Measure','Before fitting','After fitting'],[['Surface match, point-to-plane RMS (mm)',nf(r.before,3),nf(r.after,3)]]);
+  m+='<p><b>Topography measures.</b> Height variation is the standard deviation of heights inside the ROI. Angle change is the standard deviation of the surface slope angle, atan(∂h/∂x) or atan(∂h/∂y), across the ROI. A constant slope has zero angle change, so a tilted plane scores zero despite large height variation. For small slopes the information a translation fit has along X is proportional to the variance of ∂h/∂x, so this measure follows the registration directly.</p>';
+  if(state.caseIndex===K.CHEST)m+='<p><b>The chest-wall model</b> is a cylinder that curves left–right and is uniform head–foot, an idealisation of a chest wall with few features. A real chest wall has some head–foot variation, so it does better than this model but worse than an intact breast.</p>';
+  m+='<p><b>Solver status:</b> '+r.fit.status+'. Independent directions recovered: '+r.fit.rank+' of 3.</p>';
+  return m;
+}
+function methodFace(){
+  const rows=FACE_PRESETS.map(p=>{const v=faceCache.get(faceKey(p,state.change)),t=faceTopo(p);
+    return [p.name,Math.round(p.w)+' × '+Math.round(p.h),nf(t.hSD,1),nf(t.angX,1),nf(t.angY,1),v?nf(v.typical,2):'…',v?nf(v.worst,2):'…'];});
+  return '<p><b>How each ROI is tested.</b> The reference is the synthetic face inside the ROI. For each of 20 days the same random setup error (1 SD 3 mm per axis) and the same smooth surface change are applied to every ROI. The change has a 60 mm length scale and an RMS over the face equal to the slider value. Camera noise is 0.5 mm per point, and point density is fixed at one point per 16 mm², so a smaller ROI has fewer points. Each day is registered with point-to-plane ICP (translations only); the typical error is the RMS of the 3D error left after correction.</p>'+
+    tbl(['ROI','mm','Height SD','Angle X °','Angle Y °','Typical mm','Worst mm'],rows)+
+    '<p><b>Reading the numbers.</b> The surface-change level is exaggerated to make the effect visible, and translation-only fitting is simpler than clinical six-degree-of-freedom registration. The ranking between ROIs, not the absolute values, is the lesson. ROI corners are kept on the face, because the synthetic head ends in a vertical edge a camera could not see.</p>';
+}
+function methodLocal(){
+  const sizes=[60,100,140,180,220];
+  return '<p><b>Isolating ROI averaging.</b> The reference is a breast surface. The local change is a smooth depression centred on the breast: Δz = −a·exp(−r²/2σ²) with σ = 50 mm, so it is largest at the centre and fades to nothing further out. The ROI is a square centred on the same point. The reported value is the vertical-only point-to-plane fit, t = Σ nz²Δz / Σ nz², which is an area-weighted average of the change inside the ROI. “Whole surface moves” applies the same Δz to every point.</p>'+
+    tbl(['ROI size (mm)',...sizes.map(String)],[['Fraction of the change reported',...sizes.map(s=>nf(localFraction(s,'local')*100,0)+'%')],['Reported for a '+mm(state.drop,1)+' change',...sizes.map(s=>nf(localFraction(s,'local')*state.drop,2))]])+
+    '<p>A real system solves six degrees of freedom, so part of a local change can also appear as a rotation or a shift in another direction. The averaging mechanism is the same. Tolerances here are illustrative, not recommendations.</p>';
+}
+function methodNoise(r){
+  return '<p><b>What is simulated.</b> A flat phantom sits exactly at the reference height. Each measurement averages N camera points. Every point carries independent random noise (1 SD σ) plus the same calibration offset b. The measured height is therefore b on average, with a spread of σ/√N between repeat measurements. The 20 orange lines are 20 repeat measurements.</p>'+
+    tbl(['Points per measurement','Spread between repeats (mm)','Offset (mm)','Typical error (mm)'],[10,100,1000,10000].map(n=>{const sd=state.noise/Math.sqrt(n);return [n.toLocaleString('en-GB'),nf(sd,3),nf(state.bias,1),nf(Math.sqrt(sd*sd+state.bias*state.bias),2)];}))+
+    '<p>Real camera noise is partly correlated between neighbouring points, so the useful number of independent points is smaller than the raw count. That makes more points help less, never more. An offset of this kind is indistinguishable from the patient sitting higher; only a measurement against a known reference separates the two.</p>';
+}
+
+/* ---------------------------------------------------------------- scene key & caption */
+function sceneText(){
+  const i=state.caseIndex,cam=state.camera;
+  let titleTxt='',key='',cap='';
+  if(isGeom(i)){
+    titleTxt=state.phase==='before'?'Applied shift · before fitting':'What is left · after fitting';
+    key='<span>Reference surface &amp; ROI</span><span class="live">Live surface inside the ROI</span>';
+    cap=cam==='3d'?'Drag to rotate; double-click to reset. Orange lines at the corners show how each corner moved. Dashed orange means the live surface is below the reference. The registration never sees the marker or arrows.'
+      :'A cut through the ROI centre at true scale. The shaded band is the ROI. The arrow is the true motion of the marked point.';
+  }else if(i===K.FACE){
+    titleTxt='Synthetic face · drag the ROI';
+    key='<span>ROI</span>';
+    cap=cam==='top'?'Looking straight down; the top of the image is towards the head. Click or drag to move the ROI.':'Drag anywhere on the image to move the ROI. Brighter shading is the area inside the ROI.';
+  }else if(i===K.LOCAL){
+    titleTxt=state.mode==='rigid'?'Whole surface moves':'Local surface change';
+    key='<span>ROI</span><span class="dropkey">Surface that moved (bluer = more)</span>';
+    cap=cam==='3d'?'Coloured by how far each point has moved from the reference. Drag to rotate; double-click to reset. Y points towards the head.'
+      :'A left–right cut through the changed area. Dashed line: what this ROI reports, an average over its whole area, not just this line.';
+  }else{
+    titleTxt='Side view of a flat phantom';
+    key='<span>True surface</span><span class="live">Camera points &amp; 20 repeat measurements</span>';
+    cap='Each orange line is one measurement: the average height of its points. The vertical scale is exaggerated so millimetres are visible.';
+  }
+  $('#sceneTitle').textContent=titleTxt;$('#sceneKey').innerHTML=key;$('#sceneCaption').textContent=cap;
+}
+
+/* ---------------------------------------------------------------- drawing primitives */
+function setupCanvas(cv,aspect){
+  const w=Math.max(200,cv.clientWidth||cv.width),h=Math.round(w/aspect),dpr=Math.min(window.devicePixelRatio||1,2);
+  cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);cv.style.height=h+'px';
+  const g=cv.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);g.fillStyle='#0b1820';g.fillRect(0,0,w,h);
+  g.lineJoin='round';g.lineCap='round';g.font='11px system-ui,sans-serif';return {g,w,h};
+}
+function path(g,pts,color,width=1,dash=[]){if(!pts.length)return;g.strokeStyle=color;g.lineWidth=width;g.setLineDash(dash);g.beginPath();pts.forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));g.stroke();g.setLineDash([]);}
+function dot(g,p,color,r=4){g.fillStyle=color;g.beginPath();g.arc(p[0],p[1],r,0,Math.PI*2);g.fill();g.strokeStyle='#0b1820';g.lineWidth=1.5;g.stroke();}
+function textAt(g,text,x,y,color=C.muted,align='left',font){if(font)g.font=font;g.fillStyle=color;g.textAlign=align;g.textBaseline='middle';g.fillText(text,x,y);g.font='11px system-ui,sans-serif';}
+function arrow(g,p,q,color,w=2){path(g,[p,q],color,w);const a=Math.atan2(q[1]-p[1],q[0]-p[0]);path(g,[[q[0]-7*Math.cos(a-.45),q[1]-7*Math.sin(a-.45)],q,[q[0]-7*Math.cos(a+.45),q[1]-7*Math.sin(a+.45)]],color,w);}
+function labelBox(g,text,x,y,color){g.font='600 11px system-ui,sans-serif';const w=g.measureText(text).width+12;g.fillStyle='rgba(8,18,24,.82)';g.fillRect(x-w/2,y-10,w,20);textAt(g,text,x,y,color,'center','600 11px system-ui,sans-serif');}
+const rgb=c=>'rgb('+(c[0]|0)+','+(c[1]|0)+','+(c[2]|0)+')';
+const mix=(a,b,t)=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t];
+const IN=[56,156,146],OUT=[30,70,80],BLUE=[66,128,255];
+const inRect=(x,y,r)=>Math.abs(x-r.cx)<=r.w/2&&Math.abs(y-r.cy)<=r.h/2;
+
+/* Orthographic camera: yaw about Z, then elevation `pitch` above the horizontal.
+   With `home` angles given, the zoom is set at the home view and only reduced when a
+   rotated view would overflow, so dragging never makes the picture jump in size. */
+function makeView(w,h,box,zmin,zmax,yaw,pitch,home){
+  const xc=(box[0]+box[1])/2,yc=(box[2]+box[3])/2,zc=(zmin+zmax)/2;
+  const padX=26,padT=30,padB=40;
+  const rawFor=(yw,pt)=>{const ca=Math.cos(yw),sa=Math.sin(yw),cp=Math.cos(pt),sp=Math.sin(pt);
+    return (x,y,z)=>{x-=xc;y-=yc;z-=zc;const xr=x*ca-y*sa,yr=x*sa+y*ca;return [xr,-(z*cp+yr*sp),yr*cp-z*sp];};};
+  const bounds=raw=>{let b=[Infinity,-Infinity,Infinity,-Infinity];
+    for(const x of[box[0],box[1]])for(const y of[box[2],box[3]])for(const z of[zmin,zmax]){const r=raw(x,y,z);b=[Math.min(b[0],r[0]),Math.max(b[1],r[0]),Math.min(b[2],r[1]),Math.max(b[3],r[1])];}
+    return b;};
+  const fit=b=>Math.min((w-2*padX)/Math.max(1e-6,b[1]-b[0]),(h-padT-padB)/Math.max(1e-6,b[3]-b[2]));
+  const raw=rawFor(yaw,pitch),b=bounds(raw);
+  let sc=fit(b);
+  if(home)sc=Math.min(fit(bounds(rawFor(home.yaw,home.pitch))),sc*1.06);
+  const ox=w/2-(b[0]+b[1])/2*sc,oy=padT+(h-padT-padB)/2-(b[2]+b[3])/2*sc;
+  const proj=(x,y,z)=>{const r=raw(x,y,z);return [ox+r[0]*sc,oy+r[1]*sc,r[2]];};
+  const ca=Math.cos(yaw),sa=Math.sin(yaw),sp=Math.sin(pitch);
+  const J=[[sc*ca,-sc*sa],[-sc*sp*sa,-sc*sp*ca]],det=J[0][0]*J[1][1]-J[0][1]*J[1][0];
+  const toGround=(dsx,dsy)=>[(J[1][1]*dsx-J[0][1]*dsy)/det,(-J[1][0]*dsx+J[0][0]*dsy)/det];
+  return {proj,sc,toGround,kind:'3d'};
+}
+function heightRange(H,box){let lo=Infinity,hi=-Infinity;for(let j=0;j<=40;j++)for(let i=0;i<=40;i++){const z=H(box[0]+(box[1]-box[0])*i/40,box[2]+(box[3]-box[2])*j/40);if(z<lo)lo=z;if(z>hi)hi=z;}return [lo,Math.max(hi,lo+1)];}
+const LIGHT=(()=>{const v=[-.38,-.42,.82],l=Math.hypot(...v);return v.map(x=>x/l);})();
+function drawTerrain(g,view,H,box,res,colourAt){
+  const nx=res,ny=Math.max(8,Math.round(res*(box[3]-box[2])/(box[1]-box[0]))),dx=(box[1]-box[0])/nx,dy=(box[3]-box[2])/ny;
+  const W=nx+1,P=new Array(W*(ny+1)),Z=new Float64Array(W*(ny+1));
+  for(let j=0;j<=ny;j++)for(let i=0;i<=nx;i++){const x=box[0]+i*dx,y=box[2]+j*dy,z=H(x,y),k=j*W+i;Z[k]=z;P[k]=view.proj(x,y,z);}
+  const q=[];
+  for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){
+    const a=j*W+i,b=a+1,c=a+W+1,d=a+W;
+    const hx=((Z[b]-Z[a])+(Z[c]-Z[d]))/(2*dx),hy=((Z[d]-Z[a])+(Z[c]-Z[b]))/(2*dy),L=Math.hypot(hx,hy,1);
+    const lam=Math.max(0,(-hx*LIGHT[0]-hy*LIGHT[1]+LIGHT[2])/L),s=.34+.66*lam;
+    const base=colourAt(box[0]+(i+.5)*dx,box[2]+(j+.5)*dy);
+    q.push({depth:(P[a][2]+P[b][2]+P[c][2]+P[d][2])/4,a,b,c,d,col:rgb([base[0]*s,base[1]*s,base[2]*s])});
+  }
+  q.sort((u,v)=>v.depth-u.depth);
+  g.lineWidth=.7;
+  for(const t of q){g.fillStyle=t.col;g.strokeStyle=t.col;g.beginPath();g.moveTo(P[t.a][0],P[t.a][1]);g.lineTo(P[t.b][0],P[t.b][1]);g.lineTo(P[t.c][0],P[t.c][1]);g.lineTo(P[t.d][0],P[t.d][1]);g.closePath();g.fill();g.stroke();}
+}
+function gridLines(g,view,H,box,step,color){
+  g.globalAlpha=.55;
+  for(let x=Math.ceil(box[0]/step)*step;x<=box[1];x+=step){const pts=[];for(let k=0;k<=60;k++){const y=box[2]+(box[3]-box[2])*k/60;pts.push(view.proj(x,y,H(x,y)+.2));}path(g,pts,color,.6);}
+  for(let y=Math.ceil(box[2]/step)*step;y<=box[3];y+=step){const pts=[];for(let k=0;k<=60;k++){const x=box[0]+(box[1]-box[0])*k/60;pts.push(view.proj(x,y,H(x,y)+.2));}path(g,pts,color,.6);}
+  g.globalAlpha=1;
+}
+function roiPolyline(view,H,r,lift=.4){
+  const x0=r.cx-r.w/2,y0=r.cy-r.h/2,pts=[];
+  for(let e=0;e<4;e++)for(let k=0;k<=40;k++){const t=k/40;
+    const x=e===0?x0+t*r.w:e===1?x0+r.w:e===2?x0+(1-t)*r.w:x0, y=e===0?y0:e===1?y0+t*r.h:e===2?y0+r.h:y0+(1-t)*r.h;
+    pts.push(view.proj(x,y,H(x,y)+lift));}
+  return pts;
+}
+function drawRoiOutline(g,view,H,r,label,below){
+  const pts=roiPolyline(view,H,r);path(g,pts,'rgba(4,12,16,.85)',5.5);path(g,pts,C.ref,2.4);
+  if(!label)return;
+  if(below){let bot=pts[0];for(const p of pts)if(p[1]>bot[1])bot=p;labelBox(g,label,bot[0],bot[1]+22,C.ref);}
+  else{let top=pts[0];for(const p of pts)if(p[1]<top[1])top=p;labelBox(g,label,top[0],Math.max(14,top[1]-14),C.ref);}
+}
+/* Live surface wireframe. Parts that sit below the reference surface are drawn dashed and
+   faint: seen from above they would be hidden, so a downward shift no longer looks like a
+   sideways one. */
+function liveWire(g,view,H,r,s,box){
+  const n=8,x0=r.cx-r.w/2,y0=r.cy-r.h/2;
+  const inBox=(x,y)=>x>=box[0]&&x<=box[1]&&y>=box[2]&&y<=box[3];
+  /* split a polyline into runs that are all above or all below the reference */
+  const line=(pts,lw)=>{
+    let start=0;
+    for(let k=1;k<=pts.length;k++){
+      if(k<pts.length&&pts[k].below===pts[start].below)continue;
+      const seg=pts.slice(start,Math.min(k+1,pts.length)).map(p=>p.xy),hid=pts[start].below;
+      if(seg.length>1){g.globalAlpha=hid?.6:.92;path(g,seg,C.live,lw,hid?[4,4]:[]);}
+      start=k;
+    }
+    g.globalAlpha=1;
+  };
+  const sample=(u,v)=>{const x=u+s[0],y=v+s[1],z=H(u,v)+s[2];return {xy:view.proj(x,y,z),below:inBox(x,y)&&z<H(x,y)-.05};};
+  for(let k=0;k<=n;k++){
+    const a=[],b=[],lw=(k===0||k===n)?1.8:.8;
+    for(let m=0;m<=40;m++){a.push(sample(x0+r.w*k/n,y0+r.h*m/40));b.push(sample(x0+r.w*m/40,y0+r.h*k/n));}
+    line(a,lw);line(b,lw);
+  }
+}
+/* How each ROI corner moved: a short line from the reference corner to the live corner. */
+function cornerMotion(g,view,H,r,s){
+  if(norm(s)<.1)return;
+  for(const sx of[-1,1])for(const sy of[-1,1]){
+    const u=r.cx+sx*r.w/2,v=r.cy+sy*r.h/2,z=H(u,v);
+    const p=view.proj(u,v,z),q=view.proj(u+s[0],v+s[1],z+s[2]);
+    path(g,[p,q],C.live,1.6);dot(g,q,C.live,2.6);
+  }
+}
+function triad(g,view,w,h){
+  const o=view.proj(0,0,0),dirs=[[1,0,0,'X','#ff907c'],[0,1,0,'Y head','#68dfca'],[0,0,1,'Z up','#86bfff']].map(d=>{const p=view.proj(d[0],d[1],d[2]);return [p[0]-o[0],p[1]-o[1],d[3],d[4]];});
+  const m=Math.max(...dirs.map(d=>Math.hypot(d[0],d[1]))),base=[80,h-36],font='600 10px system-ui,sans-serif';
+  g.font=font;
+  const boxes=[],hits=(b)=>boxes.some(o=>b[0]<o[2]&&b[2]>o[0]&&b[1]<o[3]&&b[3]>o[1]);
+  for(const d of dirs){
+    const L=Math.hypot(d[0],d[1])||1;
+    if(L<.22*m){   // axis pointing at the viewer: the standard "out of the page" symbol
+      g.strokeStyle=d[3];g.lineWidth=1.4;g.beginPath();g.arc(base[0],base[1],4.5,0,6.2832);g.stroke();
+      g.fillStyle=d[3];g.beginPath();g.arc(base[0],base[1],1.6,0,6.2832);g.fill();
+      boxes.push([base[0]-6,base[1]-6,base[0]+6,base[1]+6]);
+      d.symbol=true;continue;
+    }
+    const q=[base[0]+d[0]/m*24,base[1]+d[1]/m*24];arrow(g,base,q,d[3],1.6);
+    boxes.push([Math.min(base[0],q[0])-2,Math.min(base[1],q[1])-2,Math.max(base[0],q[0])+2,Math.max(base[1],q[1])+2]);
+    d.q=q;d.u=[d[0]/L,d[1]/L];
+  }
+  for(const d of dirs){
+    const tw=g.measureText(d[2]).width;
+    let lx,ly,align;
+    if(d.symbol){lx=base[0]-9;ly=base[1];align='right';}
+    else{lx=d.q[0]+d.u[0]*6;ly=d.q[1]+d.u[1]*7;align=d.u[0]>.35?'left':d.u[0]<-.35?'right':'center';}
+    const box=()=>{const x0=align==='left'?lx:align==='right'?lx-tw:lx-tw/2;return [x0,ly-6,x0+tw,ly+6];};
+    for(let k=0;k<4&&hits(box());k++)ly+=(d.u&&d.u[1]>0?1:-1)*12;
+    { const b0=box(); if(b0[0]<4)lx+=4-b0[0]; if(b0[2]>w-4)lx-=b0[2]-(w-4); }
+    boxes.push(box());textAt(g,d[2],lx,ly,d[3],align,font);
+  }
+}
+function scaleBar(g,view,w,h){const L=40*view.sc;path(g,[[w-18-L,h-18],[w-18,h-18]],C.muted,1.5);path(g,[[w-18-L,h-22],[w-18-L,h-14]],C.muted,1.2);path(g,[[w-18,h-22],[w-18,h-14]],C.muted,1.2);textAt(g,'40 mm',w-18-L/2,h-30,C.muted,'center');}
+function rotateHint(g,w){textAt(g,'Drag to rotate · double-click to reset',w-14,16,C.muted,'right');}
+
+/* ---------------------------------------------------------------- scenes */
+function draw(){
+  if(mode!=='simple'||!result)return;
+  const cv=$('#teachingCanvas'),narrow=window.innerWidth<=720;
+  const {g,w,h}=setupCanvas(cv,narrow?1.15:1.6);
+  cv.classList.toggle('draggable',state.caseIndex===K.FACE||canRotate());
+  lastView=null;
+  const i=state.caseIndex;
+  if(isGeom(i)){state.camera==='3d'?drawGeom3D(g,w,h):drawCut(g,w,h,state.camera==='cutx'?0:1);}
+  else if(i===K.FACE){state.camera==='top'?drawFaceTop(g,w,h):drawFace3D(g,w,h);}
+  else if(i===K.LOCAL){state.camera==='3d'?drawLocal3D(g,w,h):drawLocalProfile(g,w,h);drawLocalChart();}
+  else{drawNoise(g,w,h);drawNoiseChart();}
+  cv.setAttribute('aria-label',$('#observationTitle').textContent+' '+$('#observationText').textContent);
+}
+function shiftShown(){return state.phase==='after'?result.residual:result.truth;}
+function drawGeom3D(g,w,h){
+  const r=result,G=GEOM[state.caseIndex],H=r.ref.H,box=G.box,roi=r.roi;
+  const [z0,z1]=heightRange(H,box),s=shiftShown();
+  const view=makeView(w,h,box,Math.min(z0,z0+s[2])-4,Math.max(z1,z1+s[2])+4,state.yaw,state.pitch,{yaw:G.yaw,pitch:G.pitch});
+  drawTerrain(g,view,H,box,60,(x,y)=>inRect(x,y,roi)?IN:OUT);
+  gridLines(g,view,H,box,20,'#0b222b');
+  liveWire(g,view,H,roi,s,box);
+  drawRoiOutline(g,view,H,roi,'ROI '+roi.w+' × '+roi.h+' mm',state.pitch<.4);
+  cornerMotion(g,view,H,roi,s);
+  const m=[roi.cx,roi.cy,H(roi.cx,roi.cy)],p=view.proj(m[0],m[1],m[2]+.5),q=view.proj(m[0]+s[0],m[1]+s[1],m[2]+s[2]+.5);
+  dot(g,p,C.ref,4.5);
+  if(norm(s)>.1){arrow(g,p,q,C.live,2.4);dot(g,q,C.live,3.5);}
+  labelBox(g,mm(norm(s),1)+' '+(state.phase==='after'?'left on the patient':'applied'),clamp(q[0],80,w-80),clamp(q[1]-24,16,h-50),C.live);
+  textAt(g,state.phase==='before'?'Before fitting':'After fitting',14,16,C.muted);
+  rotateHint(g,w);
+  lastView=view;
+  triad(g,view,w,h);scaleBar(g,view,w,h);
+}
+function drawCut(g,w,h,axis){
+  const r=result,G=GEOM[state.caseIndex],H=r.ref.H,roi=r.roi,s=shiftShown();
+  const lo=axis===0?G.box[0]:G.box[2],hi=axis===0?G.box[1]:G.box[3],other=axis===0?roi.cy:roi.cx;
+  const at=u=>axis===0?H(u,other):H(other,u);
+  const live=u=>axis===0?H(u-s[0],other-s[1])+s[2]:H(other-s[0],u-s[1])+s[2];
+  let zl=Infinity,zh=-Infinity;for(let k=0;k<=200;k++){const u=lo+(hi-lo)*k/200;for(const z of[at(u),live(u)]){zl=Math.min(zl,z);zh=Math.max(zh,z);}}
+  const L=48,R=w-18,T=34,B=h-46,sc=Math.min((R-L)/(hi-lo),(B-T)/Math.max(30,zh-zl+16));
+  const xp=u=>L+(u-lo)*sc,zmid=(zl+zh)/2,yp=z=>(T+B)/2-(z-zmid)*sc;
+  const a0=(axis===0?roi.cx-roi.w/2:roi.cy-roi.h/2),a1=a0+(axis===0?roi.w:roi.h);
+  g.fillStyle='rgba(104,223,202,.09)';g.fillRect(xp(a0),T-10,(a1-a0)*sc,B-T+20);
+  textAt(g,'ROI',xp((a0+a1)/2),T-2,C.ref,'center');
+  for(let u=Math.ceil(lo/40)*40;u<=hi;u+=40){path(g,[[xp(u),T-10],[xp(u),B+8]],C.grid);textAt(g,String(u),xp(u),B+20,C.muted,'center');}
+  const ref=[],lv=[];for(let k=0;k<=240;k++){const u=lo+(hi-lo)*k/240;ref.push([xp(u),yp(at(u))]);lv.push([xp(u),yp(live(u))]);}
+  path(g,ref,C.ref,2.6);path(g,lv,C.live,2.2,[7,4]);
+  const u0=axis===0?roi.cx:roi.cy,z0=at(u0),p=[xp(u0),yp(z0)],q=[xp(u0+s[axis]),yp(z0+s[2])];
+  dot(g,p,C.ref,4.5);if(Math.hypot(q[0]-p[0],q[1]-p[1])>1.5){arrow(g,p,q,C.live);dot(g,q,C.live,3.5);}
+  const off=axis===0?1:0;
+  textAt(g,(axis===0?'X · lateral (mm)':'Y · longitudinal, towards the head → (mm)'),w/2,h-8,C.muted,'center');
+  textAt(g,'Height Z, same scale as distance',14,16,C.muted);
+  if(Math.abs(s[off])>.05)textAt(g,'Out-of-plane motion ('+(off===0?'X':'Y')+' '+signed(s[off],1)+' mm) is not visible in this cut',w-14,16,C.muted,'right');
+}
+const faceH=(()=>{const r=A.buildReference({type:'face',base:1,feat:1,roughAmp:0,roughScale:30,roughSeed:20240517,grid:5,Lx:10,Ly:10,cx:0,cy:0});return r.H;})();
+/* The face never changes shape, only the ROI moves, so the shaded surface is rendered once
+   in two colours and the bright layer is shown through the ROI outline. Dragging stays smooth. */
+let faceLayers=null;
+function faceLayersFor(w,h,dpr){
+  const key=w+'x'+h+'@'+dpr;
+  if(faceLayers&&faceLayers.key===key)return faceLayers;
+  const view=makeView(w,h,FACE.box,-2,90,-.28,1.12);
+  const layer=col=>{const c=document.createElement('canvas');c.width=Math.round(w*dpr);c.height=Math.round(h*dpr);
+    const lg=c.getContext('2d');lg.setTransform(dpr,0,0,dpr,0,0);drawTerrain(lg,view,faceH,FACE.box,150,()=>col);return c;};
+  faceLayers={key,view,out:layer([56,112,122]),inn:layer([96,214,198])};
+  return faceLayers;
+}
+function drawFace3D(g,w,h){
+  const roi=result.roi,dpr=Math.min(window.devicePixelRatio||1,2),Ly=faceLayersFor(w,h,dpr),view=Ly.view;
+  g.drawImage(Ly.out,0,0,w,h);
+  const poly=roiPolyline(view,faceH,roi,0);
+  g.save();g.beginPath();poly.forEach((p,k)=>k?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));g.closePath();g.clip();g.drawImage(Ly.inn,0,0,w,h);g.restore();
+  drawRoiOutline(g,view,faceH,roi,'ROI '+Math.round(roi.w)+' × '+Math.round(roi.h)+' mm');
+  lastView=view;
+  triad(g,view,w,h);scaleBar(g,view,w,h);
+  textAt(g,'Drag to move the ROI',14,16,C.muted);
+}
+function drawFaceTop(g,w,h){
+  const roi=result.roi,box=FACE.box,pad=26;
+  const sc=Math.min((w-2*pad)/(box[1]-box[0]),(h-2*pad-10)/(box[3]-box[2]));
+  const ox=w/2-(box[0]+box[1])/2*sc,oy=h/2+(box[2]+box[3])/2*sc;
+  const sx=x=>ox+x*sc,sy=y=>oy-y*sc;
+  const n=110,dx=(box[1]-box[0])/n,ny=Math.round(n*(box[3]-box[2])/(box[1]-box[0])),dy=(box[3]-box[2])/ny;
+  for(let j=0;j<ny;j++)for(let i=0;i<n;i++){
+    const x=box[0]+(i+.5)*dx,y=box[2]+(j+.5)*dy,z=faceH(x,y);
+    const hx=(faceH(x+1,y)-faceH(x-1,y))/2,hy=(faceH(x,y+1)-faceH(x,y-1))/2,L=Math.hypot(hx,hy,1);
+    const lam=Math.max(0,(-hx*LIGHT[0]-hy*LIGHT[1]+LIGHT[2])/L),s=.3+.7*lam,t=clamp(z/85,0,1);
+    const base=inRect(x,y,roi)?mix([44,120,112],[150,230,214],t):mix([22,48,56],[70,120,126],t);
+    g.fillStyle=rgb([base[0]*s,base[1]*s,base[2]*s]);g.fillRect(sx(box[0]+i*dx),sy(box[2]+(j+1)*dy),dx*sc+.6,dy*sc+.6);
+  }
+  const x0=sx(roi.cx-roi.w/2),y0=sy(roi.cy+roi.h/2);
+  g.strokeStyle='rgba(4,12,16,.85)';g.lineWidth=5;g.strokeRect(x0,y0,roi.w*sc,roi.h*sc);
+  g.strokeStyle=C.ref;g.lineWidth=2.4;g.strokeRect(x0,y0,roi.w*sc,roi.h*sc);
+  labelBox(g,'ROI '+Math.round(roi.w)+' × '+Math.round(roi.h)+' mm',x0+roi.w*sc/2,Math.max(14,y0-13),C.ref);
+  textAt(g,'↑ towards the head',14,16,C.muted);textAt(g,'X · lateral →',w-14,h-14,C.muted,'right');
+  lastView={kind:'top',sc,toGround:(dsx,dsy)=>[dsx/sc,-dsy/sc],toWorld:(px,py)=>[(px-ox)/sc,(oy-py)/sc]};
+}
+function drawLocal3D(g,w,h){
+  const box=LC.box,size=state.size,roi={cx:LC.cx,cy:LC.cy,w:size,h:size},max=Math.max(.5,state.drop);
+  const H=(x,y)=>breastH(x,y)-localChange(x,y);
+  const view=makeView(w,h,box,-10,100,state.yaw,state.pitch,LOCAL_VIEW);
+  drawTerrain(g,view,H,box,62,(x,y)=>mix(inRect(x,y,roi)?IN:OUT,BLUE,clamp(localChange(x,y)/max,0,1)*(state.drop>0?.85:0)));
+  drawRoiOutline(g,view,H,roi,'ROI '+size+' × '+size+' mm',state.pitch<.4);
+  const p=view.proj(LC.cx,LC.cy,H(LC.cx,LC.cy)+.5);dot(g,p,C.live,4);
+  labelBox(g,'reports '+mm(result.rep,1)+' of '+mm(state.drop,1),clamp(p[0],90,w-90),clamp(p[1]-26,16,h-50),C.live);
+  rotateHint(g,w);
+  lastView=view;
+  triad(g,view,w,h);scaleBar(g,view,w,h);
+}
+function drawLocalProfile(g,w,h){
+  const lo=LC.box[0],hi=LC.box[1],L=50,R=w-18,T=34,B=h-46,top=Math.max(state.drop,state.gate)*1.25+.5;
+  const xp=x=>L+(x-lo)/(hi-lo)*(R-L),yp=v=>T+(v/top)*(B-T);
+  const a0=LC.cx-state.size/2,a1=LC.cx+state.size/2;
+  g.fillStyle='rgba(104,223,202,.09)';g.fillRect(xp(a0),T-10,xp(a1)-xp(a0),B-T+20);textAt(g,'ROI',xp(LC.cx),T-2,C.ref,'center');
+  for(let v=0;v<=top;v+=1){path(g,[[L,yp(v)],[R,yp(v)]],C.grid);textAt(g,nf(v,0),L-8,yp(v),C.muted,'right');}
+  path(g,[[L,yp(state.gate)],[R,yp(state.gate)]],C.warn,1.6,[6,4]);textAt(g,'tolerance '+nf(state.gate,1)+' mm',R-4,yp(state.gate)+11,C.warn,'right');
+  const pts=[];for(let k=0;k<=240;k++){const x=lo+(hi-lo)*k/240;pts.push([xp(x),yp(localChange(x,LC.cy))]);}
+  g.fillStyle='rgba(98,168,255,.18)';g.beginPath();g.moveTo(xp(lo),yp(0));pts.forEach(p=>g.lineTo(p[0],p[1]));g.lineTo(xp(hi),yp(0));g.closePath();g.fill();
+  path(g,pts,C.drop,2.4);
+  path(g,[[xp(a0),yp(result.rep)],[xp(a1),yp(result.rep)]],C.live,2.4,[7,4]);
+  labelBox(g,'ROI reports '+mm(result.rep,1),xp(LC.cx),clamp(yp(result.rep)+16,T+10,B-10),C.live);
+  textAt(g,'Change from the reference (mm, downwards)',14,16,C.muted);textAt(g,'X · lateral (mm)',w/2,h-8,C.muted,'center');
+  for(let x=Math.ceil(lo/40)*40;x<=hi;x+=40)textAt(g,String(x),xp(x),B+20,C.muted,'center');
+}
+function drawLocalChart(){
+  const cv=$('#extraCanvas');if(!cv)return;
+  const narrow=window.innerWidth<=720,{g,w,h}=setupCanvas(cv,narrow?1.7:4.3);
+  g.fillStyle='#122029';g.fillRect(0,0,w,h);
+  const L=46,R=w-14,T=12,B=h-30,top=Math.max(state.drop,state.gate)*1.2+.3;
+  const xp=s=>L+(s-40)/200*(R-L),yp=v=>B-(v/top)*(B-T);
+  for(let v=0;v<=top;v+=1){path(g,[[L,yp(v)],[R,yp(v)]],C.grid);textAt(g,nf(v,0),L-7,yp(v),C.muted,'right');}
+  for(let s=40;s<=240;s+=40)textAt(g,String(s),xp(s),B+14,C.muted,'center');
+  textAt(g,'ROI size (mm)',R,h-6,C.muted,'right');
+  const pts=[];for(let s=40;s<=240;s+=10)pts.push([xp(s),yp(state.drop*localFraction(s,state.mode))]);
+  if(state.drop>state.gate){
+    let cross=null;for(let s=40;s<=240;s+=2){if(state.drop*localFraction(Math.round(s/10)*10,state.mode)<=state.gate){cross=s;break;}}
+    if(cross!==null){g.fillStyle='rgba(255,110,90,.17)';g.fillRect(xp(cross),T,R-xp(cross),B-T);textAt(g,'change not flagged',R-6,T+10,C.bad,'right');}
+  }
+  path(g,[[L,yp(state.drop)],[R,yp(state.drop)]],'#7f99a5',1.2,[2,4]);textAt(g,'true change',L+6,yp(state.drop)-8,'#9fb6c1');
+  path(g,[[L,yp(state.gate)],[R,yp(state.gate)]],C.warn,1.5,[6,4]);textAt(g,'tolerance',L+6,yp(state.gate)+10,C.warn);
+  path(g,pts,C.live,2.4);
+  dot(g,[xp(state.size),yp(result.rep)],C.live,6);
+}
+/* Case 5: a side view of a flat phantom. The true surface is at height 0. Orange dots are one
+   measurement's camera points; each orange line is one repeat measurement (the average of its points). */
+function drawNoise(g,w,h){
+  const r=result,narrow=w<520,L=narrow?40:56,R=w-(narrow?92:132),T=34,B=h-44;
+  const reach=Math.max(3*state.noise,1);
+  const zlo=Math.min(-reach,-1)-.5,zhi=Math.max(r.bias+reach,r.bias+.6,1.2)+.5;
+  const xp=x=>L+(x+100)/200*(R-L),yp=z=>B-(z-zlo)/(zhi-zlo)*(B-T);
+  for(let z=Math.ceil(zlo);z<=Math.floor(zhi);z++){path(g,[[L,yp(z)],[R,yp(z)]],z===0?'#2d4a5a':C.grid,1);textAt(g,String(z),L-7,yp(z),C.muted,'right');}
+  g.fillStyle='rgba(120,150,165,.16)';g.fillRect(L,yp(0),R-L,B-yp(0));
+  textAt(g,'phantom',(L+R)/2,(yp(0)+B)/2,'#7f99a5','center','600 12px system-ui,sans-serif');
+  const show=Math.min(r.N,400);
+  g.fillStyle=C.live;g.globalAlpha=r.N>100?.5:.85;
+  for(let i=0;i<show;i++){const z=r.bias+state.noise*NZ.gs[i];g.beginPath();g.arc(xp(NZ.xs[i]),yp(z),r.N>100?1.8:2.6,0,6.2832);g.fill();}
+  g.globalAlpha=1;
+  g.globalAlpha=.55;for(const z of r.repeats)path(g,[[L,yp(z)],[R,yp(z)]],C.live,1.4);g.globalAlpha=1;
+  path(g,[[L,yp(0)],[R,yp(0)]],C.ref,3);
+  /* offset arrow sits between the plot and the labels; labels never cross it */
+  const ax=R+12,lx=R+24,gap=Math.abs(yp(r.bias)-yp(0));
+  const mean=r.repeats.reduce((s,v)=>s+v,0)/r.repeats.length;
+  textAt(g,'true surface',lx,yp(0)+(gap<16?8:0),C.ref,'left','600 11px system-ui,sans-serif');
+  textAt(g,'measurements',lx,yp(mean)-(gap<16?8:0),C.live,'left','600 11px system-ui,sans-serif');
+  if(r.bias>=.05){
+    if(gap>8)arrow(g,[ax,yp(0)],[ax,yp(r.bias)],C.ink,1.6);
+    const oy=gap>=40?(yp(0)+yp(r.bias))/2:yp(0)+26;
+    textAt(g,'offset '+mm(r.bias,1),lx,oy,C.ink,'left');
+  }
+  textAt(g,'Height (mm)',14,16,C.muted);
+  textAt(g,(r.N>show?'showing '+show+' of '+r.N.toLocaleString('en-GB')+' points':r.N+' points')+' · 20 repeat measurements',R,16,C.muted,'right');
+  textAt(g,'Across the phantom (200 mm)',(L+R)/2,h-12,C.muted,'center');
+}
+function drawNoiseChart(){
+  const cv=$('#extraCanvas');if(!cv)return;
+  const narrow=window.innerWidth<=720,{g,w,h}=setupCanvas(cv,narrow?1.7:4.3);
+  g.fillStyle='#122029';g.fillRect(0,0,w,h);
+  const L=46,R=w-(narrow?16:150),T=14,B=h-30,top=Math.max(state.bias,state.noise/Math.sqrt(10))*1.25+.2;
+  const lx=n=>L+Math.log10(n/10)/3*(R-L),yp=v=>B-(v/top)*(B-T);
+  const step=top>3?1:top>1.2?.5:.25;
+  for(let v=0;v<=top;v+=step){path(g,[[L,yp(v)],[R,yp(v)]],C.grid);textAt(g,nf(v,2),L-7,yp(v),C.muted,'right');}
+  for(const n of POINT_STEPS)textAt(g,n.toLocaleString('en-GB'),lx(n),B+14,C.muted,'center');
+  textAt(g,'points per measurement',R,h-4,C.muted,'right');
+  const sp=[];for(let k=0;k<=60;k++){const n=10*Math.pow(1000,k/60);sp.push([lx(n),yp(state.noise/Math.sqrt(n))]);}
+  path(g,sp,C.ref,2.4);
+  path(g,[[L,yp(state.bias)],[R,yp(state.bias)]],C.live,2.4);
+  const lab=narrow?R-4:R+8,al=narrow?'right':'left';
+  textAt(g,'random spread (shrinks)',lab,yp(state.noise/Math.sqrt(10000))-(narrow?10:0),C.ref,al);
+  textAt(g,'calibration offset (stays)',lab,yp(state.bias)-(narrow?10:0),C.live,al);
+  const N=POINT_STEPS[state.pidx];dot(g,[lx(N),yp(state.noise/Math.sqrt(N))],C.ref,5.5);dot(g,[lx(N),yp(state.bias)],C.live,5.5);
+}
+
+/* ---------------------------------------------------------------- pointer: rotate the view, or move the face ROI */
+(function(){
+  const cv=$('#teachingCanvas');let drag=null;
+  const pos=e=>{const r=cv.getBoundingClientRect();return [e.clientX-r.left,e.clientY-r.top];};
+  cv.addEventListener('pointerdown',e=>{
+    if(mode!=='simple')return;
+    if(state.caseIndex===K.FACE){
+      if(!lastView)return;
+      drag={kind:'roi',start:pos(e),moved:false,roi:{cx:state.cx,cy:state.cy,w:state.w,h:state.h}};
+    }else if(canRotate()){
+      drag={kind:'rotate',start:pos(e),moved:false,yaw:state.yaw,pitch:state.pitch};
+    }else return;
+    try{cv.setPointerCapture(e.pointerId);}catch(_){} e.preventDefault();
+  });
+  cv.addEventListener('pointermove',e=>{
+    if(!drag)return;const p=pos(e),d=[p[0]-drag.start[0],p[1]-drag.start[1]];
+    if(Math.hypot(d[0],d[1])>3)drag.moved=true;if(!drag.moved)return;
+    if(drag.kind==='rotate'){
+      state.yaw=drag.yaw+d[0]*.0085;
+      state.pitch=clamp(drag.pitch+d[1]*.006,.04,1.5);
+      draw();return;
+    }
+    const g=lastView.toGround(d[0],d[1]),prev={cx:state.cx,cy:state.cy,w:state.w,h:state.h};
+    Object.assign(state,constrainRoi(prev,{...drag.roi,cx:drag.roi.cx+g[0],cy:drag.roi.cy+g[1]}));
+    state.preset=null;syncRoiControls();
+    result.roi={cx:state.cx,cy:state.cy,w:state.w,h:state.h};result.sim=null;draw();
+    clearTimeout(renderTimer);renderTimer=setTimeout(update,60);
+  });
+  const end=e=>{
+    if(!drag)return;
+    const was=drag;drag=null;
+    if(was.kind==='rotate')return;
+    if(!was.moved&&lastView&&lastView.kind==='top'){
+      const p=pos(e),wpt=lastView.toWorld(p[0],p[1]),prev={cx:state.cx,cy:state.cy,w:state.w,h:state.h};
+      Object.assign(state,constrainRoi(prev,{...prev,cx:wpt[0],cy:wpt[1]}));state.preset=null;syncRoiControls();
+    }
+    update();
+  };
+  cv.addEventListener('pointerup',end);cv.addEventListener('pointercancel',()=>{drag=null;});
+  cv.addEventListener('dblclick',()=>{if(!canRotate())return;Object.assign(state,defaultAngles(state.caseIndex));draw();});
+})();
+
+/* ---------------------------------------------------------------- navigation */
+const LAST=LESSONS.length-1;
+function buildViews(){
+  const v=VIEWS[state.caseIndex],host=$('#viewChoices');
+  host.innerHTML=v.map(([id,t])=>'<button data-camera="'+id+'" aria-pressed="'+(state.camera===id)+'">'+t+'</button>').join('');
+  host.hidden=!v.length;
+  $$('#viewChoices button').forEach(b=>b.onclick=()=>{state.camera=b.dataset.camera;$$('#viewChoices button').forEach(o=>o.setAttribute('aria-pressed',String(o===b)));sceneText();draw();});
+}
+function selectCase(index){
+  clearTimeout(renderTimer);
+  state={caseIndex:index,camera:VIEWS[index].length?VIEWS[index][0][0]:'none',...defaultAngles(index),...DEFAULTS[index]};
+  $$('#lessonNav [data-case]').forEach(b=>b.setAttribute('aria-pressed',String(Number(b.dataset.case)===index)));
+  const l=LESSONS[index];
+  $('#lessonNumber').textContent='CASE '+String(index+1).padStart(2,'0')+' / '+String(LESSONS.length).padStart(2,'0');
+  $('#lessonTag').textContent=l.tag;$('#lessonTitle').textContent=l.title;
+  $('#lessonScenario').textContent=l.scenario;$('#lessonQuestion').textContent=l.question;
+  $('#takehomeText').textContent=l.take;$('#clinicalTitle').textContent=l.clinicalTitle;$('#clinicalText').textContent=l.clinical;
+  $('#prevLesson').disabled=index===0;$('#nextLesson').disabled=index===LAST;
+  $('#exploreAdvanced').hidden=!(isGeom(index)||index===K.FACE);
+  buildViews();buildSettings();update();
+}
+function setMode(next){
+  mode=next;$('#simpleMode').hidden=next!=='simple';$('#advancedMode').hidden=next!=='advanced';
+  $('#simpleModeBtn').setAttribute('aria-pressed',String(next==='simple'));$('#advancedModeBtn').setAttribute('aria-pressed',String(next==='advanced'));
+  if(next==='advanced'){window.SGRT.refresh(false);window.dispatchEvent(new Event('resize'));}
+  else requestAnimationFrame(draw);
+}
+function exploreAdvanced(){
+  const i=state.caseIndex;let s,b;
+  if(isGeom(i)){const c=geomCfg(state),g=GEOM[i].roi;s={type:c.type,base:c.base,feat:c.feat,roi:g.w,cx:g.cx,cy:g.cy,rough:0,noise:0,deform:0,pts:1500,tolExp:4,seed:1};b=[state.sx,state.sy,state.sz];}
+  else if(i===K.FACE){const side=Math.round(Math.sqrt(state.w*state.h)/5)*5;s={type:'face',base:1,feat:1,roi:clamp(side,60,260),cx:clamp(state.cx,-80,80),cy:clamp(state.cy,-80,80),rough:0,noise:.5,deform:0,pts:clamp(Math.round(state.w*state.h/16),400,8000),tolExp:4,seed:1};b=[3,-2,1.5];}
+  else return;
+  setMode('advanced');window.SGRT.applyPreset({s,bench:b});
+  $('#advancedMode').scrollIntoView({block:'start',behavior:'auto'});
+}
+LESSONS.forEach((l,i)=>{const b=document.createElement('button');b.className='case-button';b.dataset.case=i;b.setAttribute('aria-pressed',String(i===0));
+  b.innerHTML='<span class="case-index">'+String(i+1).padStart(2,'0')+'</span><span><strong>'+l.short+'</strong><small>'+l.sub+'</small></span>';b.onclick=()=>selectCase(i);$('#lessonNav').appendChild(b);});
+$('#simpleModeBtn').onclick=()=>setMode('simple');$('#advancedModeBtn').onclick=()=>setMode('advanced');$('#backSimple').onclick=()=>setMode('simple');
+$('#exploreAdvanced').onclick=exploreAdvanced;$('#prevLesson').onclick=()=>selectCase(Math.max(0,state.caseIndex-1));$('#nextLesson').onclick=()=>selectCase(Math.min(LAST,state.caseIndex+1));
+window.addEventListener('resize',()=>{clearTimeout(renderTimer);renderTimer=setTimeout(draw,120);});
+window.SGRTLesson={get state(){return {...state};},get result(){return result;},select:selectCase,update,setMode,K,
+  faceResult:r=>faceCache.get(faceKey(r,state.change)),simulateFace,topography,constrainRoi,localFraction,FACE_PRESETS,POINT_STEPS};
+selectCase(0);
+})();
+
+</script>
+</body>
+</html>

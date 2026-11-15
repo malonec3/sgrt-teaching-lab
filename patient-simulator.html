@@ -1,0 +1,1515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SGRT ROI studio · draw an ROI, test what it can see</title>
+<style>
+:root{
+  --bg:#0c151b; --panel:#111f29; --panel2:#14252f; --panel3:#1b2f3a;
+  --line:#2a3e4a; --line2:#3a5260;
+  --ink:#e2eef2; --dim:#afc0c7; --dim2:#8ea5af;
+  --sig:#6de0cf; --sig2:#2b6d68; --hot:#ff7f6a; --cold:#62a8ff; --ok:#8fe07a; --amber:#ffc861;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,"SFMono-Regular",Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.02em}
+p{margin:0 0 8px}
+button{font-family:var(--sans)}
+[hidden]{display:none!important}
+.wrap{max-width:1500px;margin:0 auto;padding:0 20px 40px}
+header{background:#101b23;border-bottom:1px solid var(--line);padding:18px 0}
+.mast{max-width:1500px;margin:0 auto;padding:0 20px;display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap}
+.tick{font-family:var(--mono);font-size:10px;letter-spacing:.09em;color:var(--dim2)}
+.mast h1{font-size:clamp(20px,2.2vw,27px);margin-top:4px}
+.mast .lede{color:var(--dim);font-size:13px;max-width:60ch;margin:0}
+
+.app{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start;margin-top:18px}
+@media(max-width:1060px){.app{grid-template-columns:1fr}}
+.stage,.rail{display:flex;flex-direction:column;gap:16px;min-width:0}
+.rail{position:sticky;top:12px}
+@media(max-width:1060px){.rail{position:static}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;min-width:0}
+.card>.hd{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--panel2);flex-wrap:wrap}
+.card>.hd h2{font-size:13px;display:flex;align-items:center;gap:9px}
+.card>.hd h2 .step{font:600 10.5px var(--mono);color:#082b2a;background:var(--sig);border-radius:5px;padding:2px 6px;letter-spacing:.04em}
+.card>.hd .note{font-size:11px;color:var(--dim2)}
+.card>.bd{padding:13px 14px}
+
+/* toolbar */
+.toolbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:9px 12px;border-bottom:1px solid var(--line);background:#0f1c25}
+.toolbar .grp{display:inline-flex;gap:4px;align-items:center;flex-wrap:wrap}
+.toolbar .sep{width:1px;height:22px;background:var(--line2);margin:0 4px}
+.tb{border:1px solid var(--line2);background:#122530;color:#b4c8d2;font:500 11.5px var(--sans);border-radius:6px;padding:6px 10px;cursor:pointer;min-height:30px}
+.tb:hover{color:var(--ink);border-color:#4a6a78}
+.tb[aria-pressed=true]{border-color:var(--sig);background:#183e40;color:#a8f6e6}
+.tb.preset{border-radius:20px;font-size:11px;padding:5px 10px}
+.toolbar label{font-size:11px;color:var(--dim);display:inline-flex;align-items:center;gap:6px}
+.toolbar input[type=range]{width:70px}
+
+/* canvases */
+.vis{position:relative;background:#0b1820}
+.vis canvas{display:block;width:100%;touch-action:none}
+#v3d{aspect-ratio:1.9;cursor:crosshair}
+#v3d.rotate{cursor:grab}#v3d.pan{cursor:move}#v3d.dragging{cursor:grabbing}
+.caption{font-size:11px;color:#9db3bf;padding:8px 14px;line-height:1.5;border-top:1px solid #20333e}
+.vtabs{display:inline-flex;gap:4px}
+.vtabs button{border:1px solid var(--line2);background:#122530;color:#b4c8d2;font:500 11px var(--sans);border-radius:5px;padding:5px 9px;cursor:pointer}
+.vtabs button[aria-pressed=true]{border-color:var(--sig);background:#183e40;color:#a8f6e6}
+
+/* lights */
+.lights{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;background:var(--line);border-top:1px solid var(--line)}
+.light{background:var(--panel2);padding:11px 13px;display:flex;gap:10px;align-items:flex-start}
+.light .dot{width:14px;height:14px;border-radius:50%;flex:none;margin-top:3px;background:#3a5260;box-shadow:0 0 0 3px rgba(255,255,255,.04)}
+.light.good .dot{background:var(--ok);box-shadow:0 0 10px rgba(143,224,122,.5)}
+.light.weak .dot{background:var(--amber);box-shadow:0 0 10px rgba(255,200,97,.45)}
+.light.none .dot{background:var(--hot);box-shadow:0 0 10px rgba(255,127,106,.45)}
+.light .lab{font-size:11.5px;color:var(--dim);line-height:1.3}
+.light .lab b{display:block;color:var(--ink);font-size:12.5px;font-weight:600}
+.light .lab small{display:block;font-family:var(--mono);font-size:10.5px;color:var(--dim2);margin-top:2px}
+.light.good .lab b{color:#c6f2b8}.light.weak .lab b{color:#ffe0a3}.light.none .lab b{color:#ffb3a4}
+.lights-head{display:flex;justify-content:space-between;align-items:baseline;padding:9px 14px 0;font-size:11.5px;color:var(--dim)}
+.lights-head b{color:var(--ink)}
+
+/* controls */
+.tabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:#091117;border:1px solid var(--line2);border-radius:8px;padding:4px;margin-bottom:12px}
+.tabs button{font:600 12px var(--sans);background:transparent;color:var(--dim);border:0;padding:8px 6px;border-radius:6px;cursor:pointer}
+.tabs button[aria-pressed=true]{color:#082b2a;background:var(--sig)}
+.ctl{margin-bottom:11px}
+.ctl:last-child{margin-bottom:0}
+.ctl label{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12px;color:#c8dbe2;margin-bottom:4px}
+.ctl label output{font:500 12px var(--mono);color:var(--sig);font-variant-numeric:tabular-nums}
+.ctl .help{font-size:11px;color:var(--dim2);margin-top:3px;line-height:1.45}
+input[type=range]{width:100%;-webkit-appearance:none;appearance:none;background:transparent;height:20px;margin:0;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:3px;background:var(--line2);border-radius:2px}
+input[type=range]::-moz-range-track{height:3px;background:var(--line2);border-radius:2px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;background:var(--sig);border:2px solid var(--panel);margin-top:-6px}
+input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:var(--sig);border:2px solid var(--panel)}
+input[type=range]:focus-visible{outline:2px solid var(--sig);outline-offset:3px;border-radius:3px}
+.row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end}
+.seg{display:inline-flex;gap:3px}
+.seg button{border:1px solid var(--line2);background:#122530;color:#b4c8d2;font:600 11px var(--mono);border-radius:5px;padding:6px 8px;cursor:pointer;min-width:30px}
+.seg button[aria-pressed=true]{border-color:var(--sig);background:#183e40;color:#a8f6e6}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;width:100%;font:600 13px var(--sans);color:#04211f;background:var(--sig);border:none;border-radius:7px;padding:11px 12px;cursor:pointer;margin-top:6px}
+.btn:hover{filter:brightness(1.08)}
+.btn:disabled{opacity:.5;cursor:default}
+.btn.ghost{background:transparent;color:var(--dim);border:1px solid var(--line2);margin-top:0}
+.btn.ghost:hover{color:var(--ink);filter:none}
+.btn.sm{padding:7px 10px;font-size:12px;width:auto}
+details.grp{border:1px solid var(--line);border-radius:8px;margin-top:12px;background:#0f1c25}
+details.grp summary{cursor:pointer;padding:10px 12px;font-size:12.5px;color:#cadae1;list-style:none;display:flex;align-items:center;gap:8px;font-weight:600}
+details.grp summary::-webkit-details-marker{display:none}
+details.grp summary::before{content:"+";font-family:var(--mono);color:var(--sig);width:10px}
+details.grp[open] summary::before{content:"–"}
+details.grp summary .pill{margin-left:auto;font:500 10px var(--sans);color:#082b2a;background:var(--amber);border-radius:4px;padding:2px 6px}
+details.grp .inner{padding:4px 12px 12px}
+.check{display:flex;align-items:center;gap:8px;font-size:12.5px;color:#c8dbe2;margin:10px 0 2px;cursor:pointer}
+.check input{accent-color:var(--sig);width:15px;height:15px}
+.status{font-size:11.5px;color:var(--dim2);margin-top:8px;min-height:16px}
+
+/* results */
+.reading-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line)}
+.reading{background:#14252f;padding:13px 15px}
+.reading .label{font-size:11px;color:#bdd0d9;line-height:1.4;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.reading .value{font:550 clamp(19px,2vw,24px) var(--mono);letter-spacing:-.04em;margin:6px 0 4px;color:#e6f4f7}
+.reading .value small{font-size:.55em;letter-spacing:0;margin-left:3px;color:#a7bdc8;font-family:var(--sans);font-weight:500}
+.reading .sub{font-size:10.5px;line-height:1.5;color:#a0b9c5}
+.badge{display:inline-block;font:650 9.5px var(--sans);letter-spacing:.07em;text-transform:uppercase;padding:2px 6px;border-radius:4px;background:#22343e;color:#b7cad3}
+.reading.good .value{color:#9be884}.reading.good .badge{background:#1d3a24;color:#aef095}
+.reading.warn .value{color:#ffcf7a}.reading.warn .badge{background:#3d3218;color:#ffd98f}
+.reading.bad .value{color:#ff8f78}.reading.bad .badge{background:#43211c;color:#ffad9b}
+.reading.idle .value{color:#7f99a5}
+.reading.teal .value{color:#70e3d0}
+.reading.word .value{font-size:clamp(15px,1.5vw,19px);letter-spacing:-.02em;line-height:1.35;font-family:var(--sans)}
+.notice{display:grid;grid-template-columns:1.3fr 1fr;gap:12px;padding:14px}
+@media(max-width:900px){.notice{grid-template-columns:1fr}}
+.explain{border:1px solid #2c444f;border-radius:9px;padding:14px 16px;background:#11222b}
+.explain.obs{border-left:3px solid #e7b36a}
+.eyebrow{font-size:10px;color:#8cabb9;letter-spacing:.09em;text-transform:uppercase;font-weight:650}
+.explain h3{font-size:14.5px;color:#e2f0f3;line-height:1.45;margin:5px 0 6px}
+.explain p{font-size:12.5px;line-height:1.6;color:#b7ccd5;margin:0}
+.chartwrap{padding:12px 14px 6px;border-top:1px solid var(--line)}
+.chartwrap canvas{display:block;width:100%}
+.chart-head{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px;font-size:11.5px;color:var(--dim)}
+.chart-head b{color:var(--ink)}
+.empty{padding:30px 20px;text-align:center;color:var(--dim2);font-size:13px}
+details.lesson-detail{border-top:1px solid var(--line)}
+details.lesson-detail summary{padding:11px 14px;font-size:12px;color:var(--dim);cursor:pointer;list-style:none}
+details.lesson-detail summary::-webkit-details-marker{display:none}
+details.lesson-detail summary::before{content:"+ ";font-family:var(--mono);color:var(--sig)}
+details.lesson-detail[open] summary::before{content:"– "}
+details.lesson-detail .inner{padding:0 14px 14px;font-size:12px;color:#b9ccd5;line-height:1.65}
+details.lesson-detail .inner p{margin:8px 0}
+.tblwrap{overflow:auto;border:1px solid var(--line);border-radius:6px;margin:8px 0}
+table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px;font-variant-numeric:tabular-nums}
+th{background:var(--panel3);color:var(--dim);font:550 11px var(--sans);text-align:right;padding:6px 9px;border-bottom:1px solid var(--line2);white-space:nowrap}
+th:first-child,td:first-child{text-align:left;font-family:var(--sans)}
+td{padding:5px 9px;text-align:right;border-bottom:1px solid #1e2a2f;color:var(--ink)}
+.legend{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10px;color:var(--dim2);padding:0 14px 8px}
+.ramp{flex:1;max-width:180px;height:7px;border-radius:2px;background:linear-gradient(90deg,#2f6fe0,#3d9c62,#e04a30)}
+.limits{color:#92acb9;font-size:11px;line-height:1.65;border-top:1px solid #283d49;margin-top:20px;padding-top:14px}
+.limits b{color:#c6d6dd}
+.overlay-msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;color:#cfe4ea;font-size:13px;background:rgba(8,18,24,.45);text-align:center;padding:20px}
+.kbd{font:500 10.5px var(--mono);color:#a7bdc8;border:1px solid var(--line2);border-radius:4px;padding:1px 5px}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@media(max-width:720px){.wrap{padding:0 12px 28px}.mast{padding:0 12px}.toolbar .sep{display:none}#v3d{aspect-ratio:1.4}}
+</style>
+</head>
+<body>
+<header>
+  <div class="mast">
+    <div>
+      <div class="tick">SURFACE-GUIDED RADIOTHERAPY · ROI STUDIO · v5 PROTOTYPE</div>
+      <h1>Draw an ROI anywhere. Test what it can see.</h1>
+    </div>
+    <p class="lede">One patient, one surface. Paint a region of interest on the camera view, then move the patient — or let the patient move during treatment — and see what the registration reports.</p>
+  </div>
+</header>
+
+<div class="wrap">
+<div class="app">
+
+<!-- ================= STAGE ================= -->
+<div class="stage">
+
+  <div class="card">
+    <div class="hd"><h2><span class="step">1</span>Draw the ROI on the patient</h2>
+      <div class="vtabs" role="group" aria-label="Surface colouring"><button data-v3d="ref" aria-pressed="true">Reference surface</button><button data-v3d="fit" aria-pressed="false">Mismatch after fitting</button></div></div>
+    <div class="toolbar">
+      <div class="grp" role="group" aria-label="Tool">
+        <button class="tb" data-tool="brush" aria-pressed="true">Brush</button>
+        <button class="tb" data-tool="erase" aria-pressed="false">Erase</button>
+        <button class="tb" data-tool="rect" aria-pressed="false">Rectangle</button>
+        <button class="tb" data-tool="rotate" aria-pressed="false">Rotate</button>
+        <button class="tb" data-tool="pan" aria-pressed="false">Pan</button>
+      </div>
+      <label>size <input type="range" id="brushSize" min="8" max="60" value="22" step="2"><output id="brushOut">22 mm</output></label>
+      <span class="sep"></span>
+      <div class="grp">
+        <button class="tb" id="undoBtn" title="Undo">Undo</button>
+        <button class="tb" id="mirrorBtn" title="Mirror the ROI to the other side">Mirror L↔R</button>
+        <button class="tb" id="clearBtn">Clear</button>
+      </div>
+      <span class="sep"></span>
+      <div class="grp" role="group" aria-label="View">
+        <button class="tb" id="viewTop" title="Look straight down, as the camera does">Overhead</button>
+        <button class="tb" id="viewRoi" title="Zoom to the ROI">Zoom to ROI</button>
+        <button class="tb" id="viewBody" title="Show the whole patient">Whole body</button>
+      </div>
+      <span class="sep"></span>
+      <div class="grp" id="presets" aria-label="Starting points"></div>
+    </div>
+    <div class="vis"><canvas id="v3d" width="1200" height="600" aria-label="The patient surface; paint the ROI here"></canvas><div class="overlay-msg" id="v3dHint" hidden></div></div>
+    <div class="legend" id="v3dLegend" hidden><span>towards camera</span><div class="ramp"></div><span>away</span><span id="v3dScale"></span><span style="margin-left:auto">what the console colourwash would show after the correction</span></div>
+    <div class="caption" id="v3dCaption">Paint with the brush, or drag a rectangle. <span class="kbd">scroll</span> zoom · <span class="kbd">right-drag</span> or Rotate tool to rotate · <span class="kbd">middle-drag</span> or Pan tool to move · <span class="kbd">double-click</span> overhead view. Head to the left, <b>R</b> is the patient's right.</div>
+    <div class="lights-head"><span><b>What this ROI can see</b> · from its shape alone, before any test</span><span id="lightsNote"></span></div>
+    <div class="lights" id="lights"></div>
+  </div>
+
+  <!-- results -->
+  <div class="card" id="resultsCard">
+    <div class="hd"><h2><span class="step">3</span>What the system reported</h2><span class="note" id="resultNote"></span></div>
+    <div id="results">
+      <div class="empty" id="resultsEmpty">Draw an ROI and set a shift to see a result.</div>
+      <div class="reading-grid" id="tiles" role="status" aria-live="polite" aria-atomic="true"></div>
+      <div class="chartwrap" id="monChart" hidden><div class="chart-head"><b>True motion vs what the system reported, 60 s</b><span>solid = what the patient really did · coloured = reported · band = tolerance</span></div><canvas id="monCanvas" width="1100" height="330"></canvas></div>
+      <div class="notice" id="notice" hidden>
+        <div class="explain obs"><div class="eyebrow">What to notice</div><h3 id="obsTitle"></h3><p id="obsText"></p></div>
+        <div class="explain"><div class="eyebrow">Why</div><h3 id="whyTitle"></h3><p id="whyText"></p></div>
+      </div>
+      <details class="lesson-detail" id="detailsBox"><summary>Numbers and how this is modelled</summary><div class="inner" id="details"></div></details>
+    </div>
+  </div>
+
+  <div class="limits"><b>About this model.</b> Synthetic supine patient built from smooth shapes, seen as a height map from directly above — the view an overhead camera has. Registration is point-to-plane ICP on the surface inside the ROI (translations, optionally with rotations about the ROI centre); directions the surface cannot constrain are left uncorrected rather than guessed. No camera occlusion, no colour texture, no internal anatomy, no vendor algorithm. Magnitudes are illustrative; the mechanisms are the lesson. Context: AAPM TG-302 (2022).</div>
+</div>
+
+<!-- ================= RAIL ================= -->
+<div class="rail">
+  <div class="card">
+    <div class="hd"><h2><span class="step">2</span>What happens to the patient</h2></div>
+    <div class="bd">
+      <div class="tabs" role="group" aria-label="Test type"><button data-tab="shift" aria-pressed="true">Known shift</button><button data-tab="mon" aria-pressed="false">During treatment</button></div>
+      <div class="ctl"><label for="vary">Day-to-day surface variation<output id="oVary">1.0 mm</output></label><input type="range" id="vary" min="0" max="2.5" step=".1" value="1"><div class="help">Every capture differs slightly from the reference — mask pressure, posture, swelling, breathing phase — as a smooth random change of this RMS size (35 mm scale). 0 = identical surface, camera noise only.</div></div>
+
+      <div id="tabShift">
+        <div id="shiftSliders"></div>
+        <label class="check"><input type="checkbox" id="dofBox"> Also solve rotations (6 degrees of freedom)</label>
+        <div class="status" id="shiftStatus">Tested on 6 simulated days, each with its own surface variation. Result updates as you move the sliders.</div>
+      </div>
+
+      <div id="tabMon" hidden>
+        <div class="ctl"><label for="mBreath">Breathing lift at the chest<output id="oBreath">4.0 mm</output></label><input type="range" id="mBreath" min="0" max="10" step=".5" value="4"><div class="help">Reference captured at end-exhale. Breathing changes the shape of the chest and abdomen; nothing moves rigidly.</div></div>
+        <div class="row"><div class="ctl"><label for="mDrift">Slow drift over 60 s<output id="oDrift">3.0 mm</output></label><input type="range" id="mDrift" min="0" max="8" step=".5" value="3"></div><div class="seg" data-axis="drift"><button data-v="0">X</button><button data-v="1" aria-pressed="true">Y</button><button data-v="2">Z</button></div></div>
+        <div class="row"><div class="ctl"><label for="mStep">Sudden move at 35 s<output id="oStep">4.0 mm</output></label><input type="range" id="mStep" min="0" max="10" step=".5" value="4"></div><div class="seg" data-axis="step"><button data-v="0" aria-pressed="true">X</button><button data-v="1">Y</button><button data-v="2">Z</button></div></div>
+        <div class="ctl"><label for="mTol">Tolerance (3D)<output id="oTol">±3.0 mm</output></label><input type="range" id="mTol" min="1" max="6" step=".5" value="3"></div>
+        <button class="btn" id="runMon">Run 60 s of treatment</button>
+        <div class="status" id="monStatus">The system re-registers twice a second, as a real system would. Rotations follow the checkbox on the other tab.</div>
+      </div>
+
+      <details class="grp" id="todayGrp">
+        <summary>Today's surface differs from the reference <span class="pill" id="todayPill" hidden>on</span></summary>
+        <div class="inner">
+          <p class="help" style="margin:0 0 8px;font-size:11px;color:var(--dim2)">The reference was captured on another day. These change the patient's shape or posture today, without moving the patient.</p>
+          <div class="ctl"><label for="tArm">Arm position<output id="oTArm">0°</output></label><input type="range" id="tArm" min="-25" max="25" step="1" value="0"></div>
+          <div class="ctl"><label for="tHead">Head turned<output id="oTHead">0°</output></label><input type="range" id="tHead" min="-25" max="25" step="1" value="0"></div>
+          <div class="ctl"><label for="tBreast">Breast size change<output id="oTBreast">0%</output></label><input type="range" id="tBreast" min="-30" max="30" step="2" value="0"></div>
+          <div class="ctl"><label for="tAbd">Abdomen fuller / flatter<output id="oTAbd">0 mm</output></label><input type="range" id="tAbd" min="-15" max="15" step="1" value="0"></div>
+          <div class="ctl"><label for="tSwell">Local swelling under the ROI<output id="oTSwell">0 mm</output></label><input type="range" id="tSwell" min="0" max="12" step=".5" value="0"><div class="help">A smooth bump (σ 35 mm) centred on your ROI.</div></div>
+          <button class="btn ghost sm" id="todayReset">Reset today's surface</button>
+        </div>
+      </details>
+
+      <details class="grp" id="patientGrp">
+        <summary>Patient model (changes the reference too)</summary>
+        <div class="inner">
+          <div class="ctl"><label for="pArm">Arms<output id="oPArm">by the sides</output></label><input type="range" id="pArm" min="0" max="165" step="5" value="0"></div>
+          <div class="ctl"><label for="pBreastL">Left breast<output id="oPBreastL">1.0</output></label><input type="range" id="pBreastL" min="0" max="1.5" step=".1" value="1"></div>
+          <div class="ctl"><label for="pBreastR">Right breast<output id="oPBreastR">1.0</output></label><input type="range" id="pBreastR" min="0" max="1.5" step=".1" value="1"><div class="help">0 = post-mastectomy chest wall.</div></div>
+          <div class="ctl"><label for="pDetail">Fine skin detail<output id="oPDetail">0.1 mm</output></label><input type="range" id="pDetail" min="0" max="0.6" step=".05" value="0.1"><div class="help">Reproducible small-scale relief present in both captures. 0 makes smooth regions perfectly featureless.</div></div>
+        </div>
+      </details>
+    </div>
+  </div>
+</div>
+
+</div>
+</div>
+
+<script>
+/* ===== CORE-BEGIN =====
+   SGRT ROI simulator v5 core. Units mm, degrees. Axes: x lateral (+x = patient's right),
+   y longitudinal (+y = towards the head), z vertical (up from the couch top at z = 0).
+   Everything is a height field z = h(x, y) seen from above, which is what an overhead
+   SGRT camera sees. Verified independently in Node.
+*/
+(function (root) {
+'use strict';
+
+/* ------------------------------------------------------------ random */
+function mulberry32(a) {
+  a = a >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    var t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function makeGauss(rng) {
+  var spare = null;
+  return function () {
+    if (spare !== null) { var s0 = spare; spare = null; return s0; }
+    var u = 0, v = 0, s = 0;
+    do { u = rng() * 2 - 1; v = rng() * 2 - 1; s = u * u + v * v; } while (s === 0 || s >= 1);
+    var m = Math.sqrt(-2 * Math.log(s) / s);
+    spare = v * m;
+    return u * m;
+  };
+}
+function makeNoise(seed) {
+  var R = mulberry32(seed), P = new Uint8Array(512), perm = new Uint8Array(256), i, j, t;
+  for (i = 0; i < 256; i++) perm[i] = i;
+  for (i = 255; i > 0; i--) { j = Math.floor(R() * (i + 1)); t = perm[i]; perm[i] = perm[j]; perm[j] = t; }
+  for (i = 0; i < 512; i++) P[i] = perm[i & 255];
+  var G = new Float64Array(256);
+  for (i = 0; i < 256; i++) G[i] = R() * 2 - 1;
+  function at(a, b) { return G[P[((a & 255) + (P[b & 255] & 255)) & 511] & 255]; }
+  function fade(x) { return x * x * x * (x * (x * 6 - 15) + 10); }
+  function value2(x, y) {
+    var xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+    var u = fade(xf), v = fade(yf);
+    var a = at(xi, yi), b = at(xi + 1, yi), c = at(xi, yi + 1), d = at(xi + 1, yi + 1);
+    return (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v;
+  }
+  return function (x, y, scaleMm) {
+    var f = 1 / Math.max(1e-6, scaleMm), sum = 0, amp = 1, norm = 0, fr = f, o;
+    for (o = 0; o < 4; o++) { sum += amp * value2(x * fr, y * fr); norm += amp; amp *= 0.5; fr *= 2.07; }
+    return sum / norm;
+  };
+}
+function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+function gauss2(x, y, x0, y0, sx, sy) { var a = (x - x0) / sx, b = (y - y0) / sy; return Math.exp(-0.5 * (a * a + b * b)); }
+var D2R = Math.PI / 180;
+
+/* ------------------------------------------------------------ body model */
+/* A supine patient built from smooth primitives: lofted tubes for trunk, neck, legs and
+   arms, half-ellipsoids for head, feet and hands, joined with a soft maximum, then
+   Gaussian anatomical features added on top. Every parameter is continuous, so posture
+   and deformation are simple parameter changes between the reference and today's body. */
+var BODY_DEFAULTS = {
+  armAngle: 0,      // degrees: 0 = arms by the sides, 165 = arms up above the head
+  headTurn: 0,      // degrees: face turned towards the patient's right (+) or left (-)
+  chinTilt: 0,      // degrees: chin up (+) / down (-)
+  kneeFlex: 0,      // 0..1 knees raised on a knee rest
+  breastL: 1, breastR: 1,   // 0 = post-mastectomy chest wall, 1 = typical, 1.5 = large
+  abdomen: 0,       // mm added to the abdominal dome
+  weight: 0,        // -1 .. 1 soft-tissue scale
+  swellX: 0, swellY: 0, swellAmp: 0, swellSigma: 35,   // local swelling
+  detail: 0.1,      // mm of reproducible fine skin detail
+  detailScale: 30
+};
+function lerpKeys(keys, y, idx) {
+  // smooth (cosine) interpolation of column idx against keys[k][0]; keys sorted ascending in y
+  if (y <= keys[0][0]) return keys[0][idx];
+  var n = keys.length;
+  if (y >= keys[n - 1][0]) return keys[n - 1][idx];
+  for (var k = 0; k < n - 1; k++) {
+    if (y >= keys[k][0] && y <= keys[k + 1][0]) {
+      var t = (y - keys[k][0]) / (keys[k + 1][0] - keys[k][0]);
+      t = 0.5 - 0.5 * Math.cos(Math.PI * t);
+      return keys[k][idx] + (keys[k + 1][idx] - keys[k][idx]) * t;
+    }
+  }
+  return keys[n - 1][idx];
+}
+function superEll(u, n) { // (1-|u|^n)^(1/n) for |u|<1 else 0
+  var a = Math.abs(u); if (a >= 1) return 0;
+  return Math.pow(1 - Math.pow(a, n), 1 / n);
+}
+function makeBody(params) {
+  var P = {}, k;
+  for (k in BODY_DEFAULTS) P[k] = BODY_DEFAULTS[k];
+  if (params) for (k in params) if (params[k] !== undefined) P[k] = params[k];
+  var ws = 1 + 0.07 * P.weight, hs = 1 + 0.05 * P.weight;
+
+  // trunk: [y, halfwidth, height], head at +y
+  var trunk = [
+    [-360, 95, 60], [-300, 150, 120], [-230, 168, 165], [-150, 175 * ws, 180 * hs], [-40, 170 * ws, 195 * hs],
+    [80, 150 * ws, 185 * hs], [200, 145 * ws, 188 * hs], [330, 155 * ws, 205 * hs],
+    [440, 170 * ws, 215 * hs], [520, 185, 200], [575, 190, 150]
+  ];
+  var neck = [[560, 62, 118], [640, 60, 110], [720, 62, 118]];
+  var legKeys = [ // y, x-centre (magnitude), halfwidth, height
+    [-250, 85, 88, 150 * hs], [-400, 88, 82 * ws, 140 * hs], [-560, 88, 66, 118],
+    [-700, 86, 60, 108], [-850, 84, 46, 76], [-905, 84, 46, 72]
+  ];
+  var th = P.armAngle * D2R, ux = Math.sin(th), uy = -Math.cos(th);
+  var shoulderX = 218, shoulderY = 538, armLen = 620;
+  var armKeys = [[0, 48, 96], [0.45, 43, 88], [0.55, 39, 80], [0.9, 34, 68], [1, 34, 66]];
+  var swell = P.swellAmp > 0;
+  var noise = P.detail > 0 ? makeNoise(20240517) : null;
+
+  function tube(x, y, keys, xc) {
+    var w = lerpKeys(keys, y, 1), h = lerpKeys(keys, y, 2);
+    if (y < keys[0][0] - 1 || y > keys[keys.length - 1][0] + 1) return 0;
+    return h * superEll((x - xc) / w, 2.6);
+  }
+  function legs(x, y) {
+    if (y > -250 || y < -905) return 0;
+    var xc = lerpKeys(legKeys, y, 1), w = lerpKeys(legKeys, y, 2), h = lerpKeys(legKeys, y, 3);
+    var z1 = h * superEll((Math.abs(x) - xc) / w, 2.4);
+    return z1;
+  }
+  function halfEll(x, y, x0, y0, a, b, H) {
+    var q = 1 - ((x - x0) / a) * ((x - x0) / a) - ((y - y0) / b) * ((y - y0) / b);
+    return q <= 0 ? 0 : H * Math.sqrt(q);
+  }
+  function arm(x, y, side) { // side = +1 patient's right (+x), -1 left
+    var sx0 = side * shoulderX, dx = x - sx0, dy = y - shoulderY;
+    var ax = side * ux, ay = uy;                 // unit direction of the arm
+    var s = dx * ax + dy * ay;                   // distance along the arm
+    if (s < -60 || s > armLen + 60) return 0;
+    var t = clamp(s / armLen, 0, 1);
+    var r = Math.abs(dx * (-ay) + dy * ax);      // perpendicular distance
+    var w = lerpKeys(armKeys, t, 1), h = lerpKeys(armKeys, t, 2);
+    if (s < 0) { var q0 = 1 - (r / w) * (r / w) - (s / w) * (s / w); return q0 <= 0 ? 0 : h * Math.sqrt(q0); }
+    if (s > armLen) { var q1 = 1 - (r / w) * (r / w) - ((s - armLen) / 70) * ((s - armLen) / 70); return q1 <= 0 ? 0 : (h * 0.6) * Math.sqrt(q1); }
+    return h * Math.sqrt(Math.max(0, 1 - (r / w) * (r / w)));
+  }
+  var turnDx = 62 * Math.sin(P.headTurn * D2R), tiltDy = 34 * Math.sin(P.chinTilt * D2R);
+  function faceFeatures(x, y) {
+    var lx = x - turnDx, ly = y - 800 - tiltDy;   // local face coords, nose at (0,0)
+    var f = 0;
+    f += 23 * gauss2(lx, ly, 0, 2, 9.5, 21);        // nose ridge
+    f += 6 * gauss2(lx, ly, 0, -12, 9, 7);           // nose tip
+    f += 3 * gauss2(lx, ly, -10, -13, 6, 5) + 3 * gauss2(lx, ly, 10, -13, 6, 5);
+    f -= 8 * gauss2(lx, ly, -31, 19, 14, 9) + 8 * gauss2(lx, ly, 31, 19, 14, 9); // orbits
+    f += 5 * gauss2(lx, ly, 0, 36, 44, 8);           // brow ridge
+    f += 6 * gauss2(lx, ly, -43, -4, 16, 22) + 6 * gauss2(lx, ly, 43, -4, 16, 22); // cheekbones
+    f += 4 * gauss2(lx, ly, 0, -37, 18, 6);          // lips
+    f -= 3 * gauss2(lx, ly, 0, -47, 20, 5);          // mouth groove
+    f += 7 * gauss2(lx, ly, 0, -66, 18, 12);         // chin
+    return f;
+  }
+  var H = function (x, y) {
+    // soft union of the big parts
+    var p = 8, acc = 0, z;
+    z = tube(x, y, trunk, 0); if (z > 0) acc += Math.pow(z, p);
+    z = tube(x, y, neck, 0); if (z > 0) acc += Math.pow(z, p);
+    z = halfEll(x, y, 0, 810, 78, 108, 188 + 0.9 * tiltDy * ((y - 810) / 108)); if (z > 0) acc += Math.pow(z, p);
+    z = legs(x, y); if (z > 0) acc += Math.pow(z, p);
+    z = halfEll(x, y, 86, -940, 46, 62, 160); if (z > 0) acc += Math.pow(z, p);
+    z = halfEll(x, y, -86, -940, 46, 62, 160); if (z > 0) acc += Math.pow(z, p);
+    z = arm(x, y, 1); if (z > 0) acc += Math.pow(z, p);
+    z = arm(x, y, -1); if (z > 0) acc += Math.pow(z, p);
+    if (acc <= 0) {
+      // couch: flat, with an optional local swelling that can still be placed anywhere
+      return swell ? P.swellAmp * gauss2(x, y, P.swellX, P.swellY, P.swellSigma, P.swellSigma) : 0;
+    }
+    z = Math.pow(acc, 1 / p);
+    // features
+    if (y > 690) z += faceFeatures(x, y);
+    if (y > 300 && y < 600) {
+      z -= 8 * gauss2(x, y, 0, 562, 14, 12);                                   // sternal notch
+      z += 6 * gauss2(x, y, -92, 548, 55, 7) + 6 * gauss2(x, y, 92, 548, 55, 7); // clavicles
+      z += P.breastR * (52 * gauss2(x, y, 96, 432, 56, 58) - 7 * gauss2(x, y, 96, 366, 48, 9) + 3 * gauss2(x, y, 100, 426, 7, 7));
+      z += P.breastL * (52 * gauss2(x, y, -96, 432, 56, 58) - 7 * gauss2(x, y, -96, 366, 48, 9) + 3 * gauss2(x, y, -100, 426, 7, 7));
+    }
+    if (y > -120 && y < 330) {
+      z -= 5 * gauss2(x, y, 0, 112, 8, 9);                                     // umbilicus
+      z += P.abdomen * gauss2(x, y, 0, 170, 110, 140);
+      z += 9 * gauss2(x, y, -126, -32, 22, 40) + 9 * gauss2(x, y, 126, -32, 22, 40); // iliac crests
+    }
+    if (y > -700 && y < -420) {
+      z += 10 * gauss2(x, y, -88, -560, 20, 26) + 10 * gauss2(x, y, 88, -560, 20, 26);  // patellae
+      z += P.kneeFlex * 70 * (gauss2(x, y, -88, -560, 46, 130) + gauss2(x, y, 88, -560, 46, 130));
+    }
+    if (swell) z += P.swellAmp * gauss2(x, y, P.swellX, P.swellY, P.swellSigma, P.swellSigma);
+    if (noise) z += P.detail * noise(x, y, P.detailScale);
+    return z;
+  };
+  H.params = P;
+  return H;
+}
+/* Day-to-day surface variation: a smooth random field with unit RMS over the body,
+   different for every day (seed). Multiply by the amplitude wanted. */
+function variationField(seed, scaleMm) {
+  var f = makeNoise(9000 + seed * 131), s = 0, n = 0, x, y;
+  for (y = -900; y <= 900; y += 20) for (x = -280; x <= 280; x += 20) { var v = f(x, y, scaleMm); s += v * v; n++; }
+  var k = 1 / Math.max(1e-9, Math.sqrt(s / n));
+  return function (x, y) { return k * f(x, y, scaleMm); };
+}
+/* Breathing: a smooth lift of the thorax and abdomen, largest over the sternum/epigastrium.
+   Weight 0..1; multiply by amplitude and phase. */
+function breathWeight(x, y) {
+  return gauss2(x, y, 0, 330, 150, 260) * (1 - 0.35 * Math.min(1, Math.abs(x) / 150));
+}
+
+/* ------------------------------------------------------------ grid & reference */
+var GRID = { dx: 4, x0: -300, x1: 300, y0: -1000, y1: 1000 };
+GRID.nx = Math.round((GRID.x1 - GRID.x0) / GRID.dx) + 1;
+GRID.ny = Math.round((GRID.y1 - GRID.y0) / GRID.dx) + 1;
+function sampleGrid(H) {
+  var z = new Float32Array(GRID.nx * GRID.ny), i, j;
+  for (j = 0; j < GRID.ny; j++) for (i = 0; i < GRID.nx; i++) z[j * GRID.nx + i] = H(GRID.x0 + i * GRID.dx, GRID.y0 + j * GRID.dx);
+  return z;
+}
+/* Build the registration reference over the ROI mask (Uint8Array on the global grid).
+   Returns a cropped grid with normals; `valid` marks vertices usable as correspondences
+   (masked and not on the mask edge). */
+function buildReference(zGrid, mask) {
+  var nx = GRID.nx, ny = GRID.ny, dx = GRID.dx, i, j;
+  var i0 = nx, i1 = -1, j0 = ny, j1 = -1, count = 0;
+  for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) if (mask[j * nx + i]) {
+    count++; if (i < i0) i0 = i; if (i > i1) i1 = i; if (j < j0) j0 = j; if (j > j1) j1 = j;
+  }
+  if (count < 9) return null;
+  i0 = Math.max(0, i0 - 3); i1 = Math.min(nx - 1, i1 + 3); j0 = Math.max(0, j0 - 3); j1 = Math.min(ny - 1, j1 + 3);
+  var N = i1 - i0 + 1, M = j1 - j0 + 1;
+  var z = new Float64Array(N * M), nX = new Float64Array(N * M), nY = new Float64Array(N * M), nZ = new Float64Array(N * M);
+  var hx = new Float64Array(N * M), hy = new Float64Array(N * M), valid = new Uint8Array(N * M), inRoi = new Uint8Array(N * M);
+  for (j = 0; j < M; j++) for (i = 0; i < N; i++) z[j * N + i] = zGrid[(j + j0) * nx + (i + i0)];
+  var sx = 0, sy = 0, sz = 0, nv = 0;
+  for (j = 0; j < M; j++) for (i = 0; i < N; i++) {
+    var k = j * N + i, gi = i + i0, gj = j + j0;
+    var im = i > 0 ? i - 1 : 0, ip = i < N - 1 ? i + 1 : N - 1, jm = j > 0 ? j - 1 : 0, jp = j < M - 1 ? j + 1 : M - 1;
+    var gx = (z[j * N + ip] - z[j * N + im]) / ((ip - im) * dx), gy = (z[jp * N + i] - z[jm * N + i]) / ((jp - jm) * dx);
+    var len = Math.sqrt(gx * gx + gy * gy + 1);
+    nX[k] = -gx / len; nY[k] = -gy / len; nZ[k] = 1 / len; hx[k] = gx; hy[k] = gy;
+    inRoi[k] = mask[gj * nx + gi] ? 1 : 0;
+    if (inRoi[k]) {
+      // eroded by one cell: all 8 neighbours must be inside the ROI
+      var ok = gi > 0 && gi < nx - 1 && gj > 0 && gj < ny - 1;
+      if (ok) for (var b = -1; b <= 1 && ok; b++) for (var a = -1; a <= 1; a++) if (!mask[(gj + b) * nx + (gi + a)]) { ok = false; break; }
+      valid[k] = ok ? 1 : 0;
+      if (ok) { sx += GRID.x0 + gi * dx; sy += GRID.y0 + gj * dx; sz += z[k]; nv++; }
+    }
+  }
+  if (nv < 9) return null;
+  return { N: N, M: M, dx: dx, x0: GRID.x0 + i0 * dx, y0: GRID.y0 + j0 * dx, i0: i0, j0: j0,
+           z: z, nx: nX, ny: nY, nz: nZ, hx: hx, hy: hy, valid: valid, inRoi: inRoi,
+           count: nv, cells: count, cx: sx / nv, cy: sy / nv, cz: sz / nv, area: count * dx * dx };
+}
+
+/* ------------------------------------------------------------ linear algebra (n x n symmetric) */
+function eigSym(Ain) {
+  var n = Ain.length, A = Ain.map(function (r) { return r.slice(); }), V = [], i, j, k, p, q, sweep;
+  for (i = 0; i < n; i++) { V.push([]); for (j = 0; j < n; j++) V[i].push(i === j ? 1 : 0); }
+  for (sweep = 0; sweep < 80; sweep++) {
+    var off = 0;
+    for (p = 0; p < n; p++) for (q = p + 1; q < n; q++) off += A[p][q] * A[p][q];
+    if (!(off > 1e-30)) break;
+    for (p = 0; p < n; p++) for (q = p + 1; q < n; q++) {
+      if (Math.abs(A[p][q]) < 1e-300) continue;
+      var theta = (A[q][q] - A[p][p]) / (2 * A[p][q]);
+      var sg = theta < 0 ? -1 : 1, t = sg / (Math.abs(theta) + Math.sqrt(theta * theta + 1));
+      var c = 1 / Math.sqrt(t * t + 1), s = t * c;
+      for (k = 0; k < n; k++) { var akp = A[k][p], akq = A[k][q]; A[k][p] = c * akp - s * akq; A[k][q] = s * akp + c * akq; }
+      for (k = 0; k < n; k++) { var apk = A[p][k], aqk = A[q][k]; A[p][k] = c * apk - s * aqk; A[q][k] = s * apk + c * aqk; }
+      for (k = 0; k < n; k++) { var vkp = V[k][p], vkq = V[k][q]; V[k][p] = c * vkp - s * vkq; V[k][q] = s * vkp + c * vkq; }
+    }
+  }
+  var vals = [], vecs = [];
+  for (i = 0; i < n; i++) { vals.push(A[i][i]); var v = []; for (k = 0; k < n; k++) v.push(V[k][i]); vecs.push(v); }
+  var idx = vals.map(function (_, i) { return i; }).sort(function (a, b) { return vals[b] - vals[a]; });
+  return { values: idx.map(function (i) { return vals[i]; }), vectors: idx.map(function (i) { return vecs[i]; }) };
+}
+function pinvSym(A, tol) {
+  var n = A.length, e = eigSym(A), lmax = Math.max(e.values[0], 1e-300), out = [], kept = [], k, a, b;
+  for (a = 0; a < n; a++) { out.push([]); for (b = 0; b < n; b++) out[a].push(0); }
+  for (k = 0; k < n; k++) {
+    var lam = e.values[k];
+    if (!(lam > 0) || lam / lmax <= tol) { kept.push(0); continue; }
+    kept.push(1);
+    var v = e.vectors[k], inv = 1 / lam;
+    for (a = 0; a < n; a++) for (b = 0; b < n; b++) out[a][b] += inv * v[a] * v[b];
+  }
+  return { M: out, eig: e, kept: kept, rank: kept.reduce(function (s, v) { return s + v; }, 0) };
+}
+function matVec(A, x) { return A.map(function (r) { var s = 0; for (var i = 0; i < r.length; i++) s += r[i] * x[i]; return s; }); }
+function matMul(A, B) {
+  var n = A.length, m = B[0].length, p = B.length, C = [], i, j, k;
+  for (i = 0; i < n; i++) { C.push([]); for (j = 0; j < m; j++) { var s = 0; for (k = 0; k < p; k++) s += A[i][k] * B[k][j]; C[i].push(s); } }
+  return C;
+}
+function zeros(n) { var A = [], i, j; for (i = 0; i < n; i++) { A.push([]); for (j = 0; j < n; j++) A[i].push(0); } return A; }
+
+/* ------------------------------------------------------------ rigid transforms */
+function rotExp(w) { // Rodrigues: rotation matrix from a rotation vector (radians)
+  var th = Math.sqrt(w[0] * w[0] + w[1] * w[1] + w[2] * w[2]);
+  if (th < 1e-12) return [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  var kx = w[0] / th, ky = w[1] / th, kz = w[2] / th, c = Math.cos(th), s = Math.sin(th), v = 1 - c;
+  return [[c + kx * kx * v, kx * ky * v - kz * s, kx * kz * v + ky * s],
+          [ky * kx * v + kz * s, c + ky * ky * v, ky * kz * v - kx * s],
+          [kz * kx * v - ky * s, kz * ky * v + kx * s, c + kz * kz * v]];
+}
+function rotLog(R) { // rotation vector (radians) from a rotation matrix
+  var c = clamp((R[0][0] + R[1][1] + R[2][2] - 1) / 2, -1, 1), th = Math.acos(c);
+  if (th < 1e-9) return [0, 0, 0];
+  var f = th / (2 * Math.sin(th));
+  return [(R[2][1] - R[1][2]) * f, (R[0][2] - R[2][0]) * f, (R[1][0] - R[0][1]) * f];
+}
+function rotT(R) { return [[R[0][0], R[1][0], R[2][0]], [R[0][1], R[1][1], R[2][1]], [R[0][2], R[1][2], R[2][2]]]; }
+function rotFromDeg(pitch, roll, yaw) { return rotExp([pitch * D2R, roll * D2R, yaw * D2R]); }
+/* Apply motion {R, t} about centre c to a point array in place. */
+function applyMotion(pts, R, t, c) {
+  for (var p = 0; p < pts.length; p += 3) {
+    var x = pts[p] - c[0], y = pts[p + 1] - c[1], z = pts[p + 2] - c[2];
+    pts[p] = c[0] + R[0][0] * x + R[0][1] * y + R[0][2] * z + t[0];
+    pts[p + 1] = c[1] + R[1][0] * x + R[1][1] * y + R[1][2] * z + t[1];
+    pts[p + 2] = c[2] + R[2][0] * x + R[2][1] * y + R[2][2] * z + t[2];
+  }
+}
+
+/* ------------------------------------------------------------ live capture */
+/* Jittered samples of the live height field inside the ROI mask, with point density
+   limited so that very large ROIs stay interactive. */
+function sampleLive(mask, Hlive, rng, opts) {
+  var o = opts || {}, maxPts = o.maxPts || 3000, density = o.density || 1 / 16; // points per mm^2
+  var nx = GRID.nx, ny = GRID.ny, dx = GRID.dx, cells = 0, i, j;
+  for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) if (mask[j * nx + i]) cells++;
+  if (!cells) return new Float64Array(0);
+  var area = cells * dx * dx, want = Math.min(maxPts, Math.max(60, Math.round(area * density)));
+  var spacing = Math.sqrt(area / want), out = [];
+  // walk a jittered lattice of the given spacing over the bounding box, keeping points whose cell is masked
+  var i0 = nx, i1 = -1, j0 = ny, j1 = -1;
+  for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) if (mask[j * nx + i]) { if (i < i0) i0 = i; if (i > i1) i1 = i; if (j < j0) j0 = j; if (j > j1) j1 = j; }
+  var X0 = GRID.x0 + i0 * dx, X1 = GRID.x0 + i1 * dx, Y0 = GRID.y0 + j0 * dx, Y1 = GRID.y0 + j1 * dx;
+  for (var yy = Y0; yy <= Y1 + 1e-9; yy += spacing) for (var xx = X0; xx <= X1 + 1e-9; xx += spacing) {
+    var x = xx + (rng() - 0.5) * spacing * 0.9, y = yy + (rng() - 0.5) * spacing * 0.9;
+    var ci = Math.round((x - GRID.x0) / dx), cj = Math.round((y - GRID.y0) / dx);
+    if (ci < 0 || ci >= nx || cj < 0 || cj >= ny || !mask[cj * nx + ci]) continue;
+    out.push(x, y, Hlive(x, y));
+  }
+  return Float64Array.from(out);
+}
+
+/* ------------------------------------------------------------ registration */
+/* Point-to-plane ICP of the live points onto the masked reference, solving translation
+   only (dof 3) or translation + rotation about the ROI centroid (dof 6). Directions whose
+   normal-matrix eigenvalue falls below `tol` x largest are left unsolved (truncated
+   pseudo-inverse), rather than amplified. Rotational unknowns are scaled by the ROI's
+   RMS radius so that the eigenvalue cut-off compares like with like.
+   Returns the detected patient motion (the inverse of the applied correction). */
+function registerICP(ref, live, opts) {
+  var o = opts || {}, dof = o.dof === 6 ? 6 : 3, iters = o.iters || 60, win = o.win || 3;
+  var trim = o.trim == null ? 0.9 : o.trim, tol = o.tol == null ? 1e-4 : o.tol;
+  var settleTol = o.settleTol == null ? 0.2 : o.settleTol, maxStep = o.maxStep || 60, maxTotal = o.maxTotal || 120;
+  var N = ref.N, M = ref.M, dx = ref.dx, x0 = ref.x0, y0 = ref.y0, c = [ref.cx, ref.cy, ref.cz];
+  var nP = (live.length / 3) | 0, cur = Float64Array.from(live);
+  var Rtot = [[1, 0, 0], [0, 1, 0], [0, 0, 1]], ttot = [0, 0, 0];
+  if (o.init) { Rtot = o.init.R.map(function (r) { return r.slice(); }); ttot = o.init.t.slice(); applyMotion(cur, Rtot, ttot, c); }
+  // RMS radius of the live cloud about the centroid, for scaling the rotational unknowns
+  var Lc = 0, p;
+  for (p = 0; p < nP; p++) { var rx = cur[3 * p] - c[0], ry = cur[3 * p + 1] - c[1]; Lc += rx * rx + ry * ry; }
+  Lc = Math.max(10, Math.sqrt(Lc / Math.max(1, nP)));
+  var d2 = new Float64Array(nP), ci = new Int32Array(nP), J = new Float64Array(6);
+  var A = zeros(dof), b = new Array(dof).fill(0), usedCount = 0, rms = 0, iterUsed = 0, converged = false, settled = false, diverged = false;
+  var hist = [], HW = 6, it, ii, jj, cut = Infinity, pi = null;
+  for (it = 0; it < iters; it++) {
+    var m = 0;
+    for (p = 0; p < nP; p++) {
+      var px = cur[3 * p], py = cur[3 * p + 1], pz = cur[3 * p + 2];
+      var gi0 = Math.round((px - x0) / dx), gj0 = Math.round((py - y0) / dx), best = Infinity, bi = -1;
+      for (jj = gj0 - win; jj <= gj0 + win; jj++) {
+        if (jj < 0 || jj >= M) continue;
+        var rb = jj * N, yv = y0 + jj * dx - py;
+        for (ii = gi0 - win; ii <= gi0 + win; ii++) {
+          if (ii < 0 || ii >= N) continue;
+          var kk = rb + ii; if (!ref.valid[kk]) continue;
+          var ex = x0 + ii * dx - px, ez = ref.z[kk] - pz, dd = ex * ex + yv * yv + ez * ez;
+          if (dd < best) { best = dd; bi = kk; }
+        }
+      }
+      ci[p] = bi; if (bi >= 0) { d2[p] = best; m++; }
+    }
+    if (m < 12) break;
+    cut = Infinity;
+    if (trim < 1) {
+      var arr = new Float64Array(m), c2 = 0;
+      for (p = 0; p < nP; p++) if (ci[p] >= 0) arr[c2++] = d2[p];
+      arr.sort(); cut = arr[Math.min(m - 1, Math.max(0, Math.floor(m * trim) - 1))];
+    }
+    A = zeros(dof); b = new Array(dof).fill(0);
+    var se = 0, used = 0, a, bb;
+    for (p = 0; p < nP; p++) {
+      var k = ci[p]; if (k < 0 || d2[p] > cut) continue;
+      var nxk = ref.nx[k], nyk = ref.ny[k], nzk = ref.nz[k];
+      var qx = x0 + (k % N) * dx, qy = y0 + ((k / N) | 0) * dx, qz = ref.z[k];
+      var r = (cur[3 * p] - qx) * nxk + (cur[3 * p + 1] - qy) * nyk + (cur[3 * p + 2] - qz) * nzk;
+      J[0] = nxk; J[1] = nyk; J[2] = nzk;
+      if (dof === 6) {
+        var rx0 = cur[3 * p] - c[0], ry0 = cur[3 * p + 1] - c[1], rz0 = cur[3 * p + 2] - c[2];
+        J[3] = (ry0 * nzk - rz0 * nyk) / Lc; J[4] = (rz0 * nxk - rx0 * nzk) / Lc; J[5] = (rx0 * nyk - ry0 * nxk) / Lc;
+      }
+      for (a = 0; a < dof; a++) { b[a] -= r * J[a]; for (bb = a; bb < dof; bb++) A[a][bb] += J[a] * J[bb]; }
+      se += r * r; used++;
+    }
+    for (a = 0; a < dof; a++) for (bb = 0; bb < a; bb++) A[a][bb] = A[bb][a];
+    if (used < 12) break;
+    usedCount = used; rms = Math.sqrt(se / used); iterUsed = it + 1;
+    pi = pinvSym(A, tol);
+    var s = matVec(pi.M, b), fin = true;
+    for (a = 0; a < dof; a++) if (!isFinite(s[a])) fin = false;
+    if (!fin) break;
+    var tstep = [s[0], s[1], s[2]], mag = Math.sqrt(s[0] * s[0] + s[1] * s[1] + s[2] * s[2]);
+    if (mag > maxStep) { var f = maxStep / mag; tstep[0] *= f; tstep[1] *= f; tstep[2] *= f; }
+    var Rstep = dof === 6 ? rotExp([s[3] / Lc, s[4] / Lc, s[5] / Lc]) : [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+    applyMotion(cur, Rstep, tstep, c);
+    // compose: p_cur = c + Rtot (p0 - c) + ttot
+    Rtot = matMul(Rstep, Rtot); ttot = matVec(Rstep, ttot); ttot[0] += tstep[0]; ttot[1] += tstep[1]; ttot[2] += tstep[2];
+    var tot = Math.sqrt(ttot[0] * ttot[0] + ttot[1] * ttot[1] + ttot[2] * ttot[2]);
+    if (tot > maxTotal) { diverged = true; break; }
+    var stepSize = Math.abs(tstep[0]) + Math.abs(tstep[1]) + Math.abs(tstep[2]) + (dof === 6 ? (Math.abs(s[3]) + Math.abs(s[4]) + Math.abs(s[5])) : 0);
+    if (stepSize < 1e-5) { converged = true; break; }
+    hist.push(ttot.concat(dof === 6 ? rotLog(Rtot).map(function (v) { return v * Lc; }) : []));
+    if (hist.length >= HW && it >= 8) {
+      var w0 = hist.length - HW, mt = new Array(hist[0].length).fill(0), q, spread = 0;
+      for (q = w0; q < hist.length; q++) for (a = 0; a < mt.length; a++) mt[a] += hist[q][a] / HW;
+      for (q = w0; q < hist.length; q++) { var dd2 = 0; for (a = 0; a < mt.length; a++) dd2 += (hist[q][a] - mt[a]) * (hist[q][a] - mt[a]); spread = Math.max(spread, Math.sqrt(dd2)); }
+      if (spread < settleTol) {
+        ttot = [mt[0], mt[1], mt[2]];
+        if (dof === 6) Rtot = rotExp([mt[3] / Lc, mt[4] / Lc, mt[5] / Lc]);
+        converged = true; settled = true; break;
+      }
+    }
+  }
+  var failed = diverged || usedCount < 12;
+  var status = diverged ? 'Out of capture range' : usedCount < 12 ? 'Insufficient overlap' : !converged ? 'Iteration limit (accepted)' : settled ? 'Converged (settled)' : 'Converged';
+  if (failed) { Rtot = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]; ttot = [0, 0, 0]; }
+  // mismatch at the accepted transform using the final correspondence set
+  var fin2 = Float64Array.from(live); applyMotion(fin2, Rtot, ttot, c);
+  var finalSE = 0, finalN = 0;
+  for (p = 0; p < nP; p++) {
+    var fk = ci[p]; if (fk < 0 || d2[p] > cut) continue;
+    var fr = (fin2[3 * p] - (x0 + (fk % N) * dx)) * ref.nx[fk] + (fin2[3 * p + 1] - (y0 + ((fk / N) | 0) * dx)) * ref.ny[fk] + (fin2[3 * p + 2] - ref.z[fk]) * ref.nz[fk];
+    finalSE += fr * fr; finalN++;
+  }
+  rms = !failed && finalN ? Math.sqrt(finalSE / finalN) : NaN;
+  // detected patient motion = inverse of the correction
+  var Rdet = rotT(Rtot), tdet = matVec(Rdet, ttot).map(function (v) { return -v; });
+  var ang = rotLog(Rdet).map(function (v) { return v / D2R; });
+  return { failed: failed, status: status, t: tdet, R: Rdet, angles: ang, det6: tdet.concat(ang),
+           correction: { R: Rtot, t: ttot }, rms: rms, used: usedCount, iters: iterUsed, rank: pi ? pi.rank : 0, Lc: Lc, dof: dof };
+}
+
+/* ------------------------------------------------------------ what the ROI can see */
+/* Normal-matrix conditioning over the valid reference vertices and a camera-noise-only
+   estimate of the 1 SD uncertainty of each unknown, for dof 3 or 6. */
+function conditioning(ref, dof) {
+  dof = dof === 6 ? 6 : 3;
+  var A = zeros(dof), Az = zeros(dof), cnt = 0, Lc = 0, i, j, k, a, b, J = new Float64Array(6);
+  var N = ref.N, M = ref.M;
+  for (j = 0; j < M; j++) for (i = 0; i < N; i++) { k = j * N + i; if (!ref.valid[k]) continue; var rx = ref.x0 + i * ref.dx - ref.cx, ry = ref.y0 + j * ref.dx - ref.cy; Lc += rx * rx + ry * ry; cnt++; }
+  Lc = Math.max(10, Math.sqrt(Lc / Math.max(1, cnt)));
+  for (j = 0; j < M; j++) for (i = 0; i < N; i++) {
+    k = j * N + i; if (!ref.valid[k]) continue;
+    var nx = ref.nx[k], ny = ref.ny[k], nz = ref.nz[k];
+    J[0] = nx; J[1] = ny; J[2] = nz;
+    if (dof === 6) {
+      var px = ref.x0 + i * ref.dx - ref.cx, py = ref.y0 + j * ref.dx - ref.cy, pz = ref.z[k] - ref.cz;
+      J[3] = (py * nz - pz * ny) / Lc; J[4] = (pz * nx - px * nz) / Lc; J[5] = (px * ny - py * nx) / Lc;
+    }
+    var w = nz * nz;
+    for (a = 0; a < dof; a++) for (b = 0; b < dof; b++) { A[a][b] += J[a] * J[b]; Az[a][b] += w * J[a] * J[b]; }
+  }
+  for (a = 0; a < dof; a++) for (b = 0; b < dof; b++) { A[a][b] /= Math.max(1, cnt); Az[a][b] /= Math.max(1, cnt); }
+  return { A: A, Az: Az, count: cnt, Lc: Lc, dof: dof };
+}
+var POINT_EFFICIENCY = 0.75;
+function predictSigma(cond, sN, nPts, tol) {
+  var n = Math.max(1, nPts * POINT_EFFICIENCY), dof = cond.dof, pi = pinvSym(cond.A, tol == null ? 1e-4 : tol);
+  var C = matMul(matMul(pi.M, cond.Az), pi.M), sigma = [], solvable = [], k, a, b;
+  var keepDir = zeros(dof);
+  for (k = 0; k < dof; k++) if (pi.kept[k]) { var v = pi.eig.vectors[k]; for (a = 0; a < dof; a++) for (b = 0; b < dof; b++) keepDir[a][b] += v[a] * v[b]; }
+  for (k = 0; k < dof; k++) {
+    var vv = C[k][k] * sN * sN / n, s = vv > 0 ? Math.sqrt(vv) : 0;
+    if (k >= 3) s = s / cond.Lc / D2R;      // scaled rotation -> degrees
+    sigma.push(s); solvable.push(keepDir[k][k]);
+  }
+  return { rank: pi.rank, eig: pi.eig, sigma: sigma, solvable: solvable, dof: dof };
+}
+/* Angle-change topography inside the ROI (SD of the slope angle along x and y, degrees). */
+function topography(ref) {
+  var n = 0, sx = 0, sy = 0, qx = 0, qy = 0, sz = 0, qz = 0, i, j, k;
+  for (j = 0; j < ref.M; j++) for (i = 0; i < ref.N; i++) {
+    k = j * ref.N + i; if (!ref.valid[k]) continue;
+    var ax = Math.atan(ref.hx[k]) / D2R, ay = Math.atan(ref.hy[k]) / D2R, z = ref.z[k];
+    sx += ax; qx += ax * ax; sy += ay; qy += ay * ay; sz += z; qz += z * z; n++;
+  }
+  if (!n) return { angX: 0, angY: 0, hSD: 0 };
+  var sd = function (s, q) { return Math.sqrt(Math.max(0, q / n - (s / n) * (s / n))); };
+  return { angX: sd(sx, qx), angY: sd(sy, qy), hSD: sd(sz, qz) };
+}
+
+var CORE = { mulberry32: mulberry32, makeGauss: makeGauss, makeNoise: makeNoise, clamp: clamp, gauss2: gauss2, D2R: D2R,
+  BODY_DEFAULTS: BODY_DEFAULTS, makeBody: makeBody, breathWeight: breathWeight, variationField: variationField, GRID: GRID, sampleGrid: sampleGrid,
+  buildReference: buildReference, eigSym: eigSym, pinvSym: pinvSym, matVec: matVec, matMul: matMul,
+  rotExp: rotExp, rotLog: rotLog, rotT: rotT, rotFromDeg: rotFromDeg, applyMotion: applyMotion,
+  sampleLive: sampleLive, registerICP: registerICP, conditioning: conditioning, predictSigma: predictSigma, topography: topography };
+if (typeof module !== 'undefined' && module.exports) module.exports = CORE; else root.SGRT_CORE = CORE;
+})(typeof window !== 'undefined' ? window : this);
+/* ===== CORE-END ===== */
+
+</script>
+<script>
+(function () {
+'use strict';
+const C = window.SGRT_CORE, G = C.GRID, NX = G.nx, NY = G.ny, DX = G.dx;
+const $ = s => document.querySelector(s), $$ = s => Array.from(document.querySelectorAll(s));
+const clamp = C.clamp;
+const nf = (n, d = 2) => !Number.isFinite(n) ? '—' : (Math.abs(n) < .5 * Math.pow(10, -d) ? 0 : n).toFixed(d);
+const signed = (n, d = 1) => { const s = nf(n, d); return (Number(s) > 0 ? '+' : '') + s; };
+const mm = (v, d = 1) => nf(v, d) + ' mm';
+const norm3 = v => Math.hypot(v[0], v[1], v[2]);
+const AXES = [
+  { k: 'X', name: 'X · lateral', long: 'left–right (X)', unit: 'mm', col: '#ff907c' },
+  { k: 'Y', name: 'Y · longitudinal', long: 'head–foot (Y)', unit: 'mm', col: '#68dfca' },
+  { k: 'Z', name: 'Z · vertical', long: 'up–down (Z)', unit: 'mm', col: '#86bfff' },
+  { k: 'Pitch', name: 'Pitch · about X', long: 'pitch', unit: '°', col: '#f2a6ff' },
+  { k: 'Roll', name: 'Roll · about Y', long: 'roll', unit: '°', col: '#ffd27a' },
+  { k: 'Yaw', name: 'Yaw · about Z', long: 'yaw', unit: '°', col: '#b8f0a0' }
+];
+const NOISE = 0.3, SEED = 1, DAYS = 6, VARY_SCALE = 35;
+const varyFields = [];
+function dayField(d) { if (!varyFields[d]) varyFields[d] = C.variationField(d, VARY_SCALE); return varyFields[d]; }
+function dayBody(H, d) { const f = dayField(d), a = S.vary; return a > 0 ? (x, y) => H(x, y) + a * f(x, y) : H; }
+
+/* ---------------------------------------------------------------- state */
+const S = {
+  tool: 'brush', brush: 22, mask: new Uint8Array(NX * NY), undo: [],
+  dof: 3, shift: [3, 0, 0, 0, 0, 0], tab: 'shift',
+  mon: { breath: 4, drift: 3, driftAxis: 1, step: 4, stepAxis: 0, tol: 3 },
+  patient: { armAngle: 0, breastL: 1, breastR: 1, detail: 0.1 },
+  vary: 1.0,
+  today: { arm: 0, head: 0, breast: 0, abd: 0, swell: 0 },
+  v3d: 'ref', view: { cx: 0, cy: 0, span: 2000, yaw: 0, pitch: Math.PI / 2 }
+};
+let Href = null, zRef = null, Hlive = null, ref = null, lights = null, topo = null;
+let shiftResult = null, monResult = null, lastFit = null, monRunning = false;
+let local3d = null;
+
+/* ---------------------------------------------------------------- body */
+function liveParams() {
+  const p = S.patient, t = S.today, c = ref ? [ref.cx, ref.cy] : [0, 0];
+  return { armAngle: clamp(p.armAngle + t.arm, 0, 170), headTurn: t.head, breastL: p.breastL * (1 + t.breast / 100), breastR: p.breastR * (1 + t.breast / 100),
+           abdomen: t.abd, swellX: c[0], swellY: c[1], swellAmp: t.swell, detail: p.detail };
+}
+function todayActive() { const t = S.today; return !!(t.arm || t.head || t.breast || t.abd || t.swell); }
+function rebuildReferenceBody() {
+  const p = S.patient;
+  Href = C.makeBody({ armAngle: p.armAngle, breastL: p.breastL, breastR: p.breastR, detail: p.detail });
+  zRef = C.sampleGrid(Href);
+  local3d = null; bodyImg = null;
+}
+function rebuildLiveBody() { Hlive = C.makeBody(liveParams()); }
+function rebuildRef() {
+  ref = C.buildReference(zRef, S.mask);
+  local3d = null; roiImg = null; washImg = null;
+  if (!ref) { lights = null; topo = null; return; }
+  topo = C.topography(ref);
+  const cond = C.conditioning(ref, S.dof), nPts = Math.min(3000, Math.max(60, ref.area / 16));
+  lights = C.predictSigma(cond, NOISE, nPts, 1e-4);
+  lights.nPts = Math.round(nPts);
+  lights.nzMean = Math.sqrt(cond.A[2][2]);
+  rebuildLiveBody();   // swelling follows the ROI centre
+}
+
+/* ---------------------------------------------------------------- mask tools */
+function pushUndo() { S.undo.push(Uint8Array.from(S.mask)); if (S.undo.length > 25) S.undo.shift(); }
+function paintDisc(x, y, r, val) {
+  const i0 = Math.max(0, Math.floor((x - r - G.x0) / DX)), i1 = Math.min(NX - 1, Math.ceil((x + r - G.x0) / DX));
+  const j0 = Math.max(0, Math.floor((y - r - G.y0) / DX)), j1 = Math.min(NY - 1, Math.ceil((y + r - G.y0) / DX));
+  for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+    const dx = G.x0 + i * DX - x, dy = G.y0 + j * DX - y;
+    if (dx * dx + dy * dy <= r * r) S.mask[j * NX + i] = val;
+  }
+}
+function paintStroke(x0, y0, x1, y1, r, val) {
+  const L = Math.hypot(x1 - x0, y1 - y0), n = Math.max(1, Math.ceil(L / (r * 0.4)));
+  for (let k = 0; k <= n; k++) paintDisc(x0 + (x1 - x0) * k / n, y0 + (y1 - y0) * k / n, r, val);
+}
+function fillRect(xa, xb, ya, yb, val) {
+  const i0 = clamp(Math.round((Math.min(xa, xb) - G.x0) / DX), 0, NX - 1), i1 = clamp(Math.round((Math.max(xa, xb) - G.x0) / DX), 0, NX - 1);
+  const j0 = clamp(Math.round((Math.min(ya, yb) - G.y0) / DX), 0, NY - 1), j1 = clamp(Math.round((Math.max(ya, yb) - G.y0) / DX), 0, NY - 1);
+  for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) S.mask[j * NX + i] = val;
+}
+function fillEllipse(cx, cy, rx, ry) {
+  for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) {
+    const x = (G.x0 + i * DX - cx) / rx, y = (G.y0 + j * DX - cy) / ry;
+    if (x * x + y * y <= 1) S.mask[j * NX + i] = 1;
+  }
+}
+const PRESETS = [
+  { n: 'Face', f: () => fillEllipse(0, 795, 68, 88) },
+  { n: 'Left breast', f: () => fillEllipse(-96, 432, 88, 92) },
+  { n: 'Both breasts', f: () => fillRect(-190, 190, 330, 545, 1) },
+  { n: 'Abdomen', f: () => fillRect(-70, 70, 150, 300, 1) },
+  { n: 'Pelvis', f: () => fillRect(-150, 150, -150, 40, 1) },
+  { n: 'Thigh', f: () => fillRect(52, 128, -520, -300, 1) },
+  { n: 'Couch', f: () => fillRect(190, 290, -820, -620, 1) }
+];
+
+/* ---------------------------------------------------------------- shading helpers */
+const LIGHT = (() => { const v = [-0.35, -0.5, 0.79], l = Math.hypot(...v); return v.map(a => a / l); })();
+function normalAt(i, j) {
+  const im = i > 0 ? i - 1 : 0, ip = i < NX - 1 ? i + 1 : NX - 1, jm = j > 0 ? j - 1 : 0, jp = j < NY - 1 ? j + 1 : NY - 1;
+  const gx = (zRef[j * NX + ip] - zRef[j * NX + im]) / ((ip - im) * DX), gy = (zRef[jp * NX + i] - zRef[jm * NX + i]) / ((jp - jm) * DX);
+  const l = Math.hypot(gx, gy, 1); return [-gx / l, -gy / l, 1 / l];
+}
+let rectDrag = null, hover = null, bodyImg = null, roiImg = null, washImg = null;
+function gridImage(fill) { // NY x NX image: column = -y, row = +x (head left, patient's right at the bottom)
+  const cv = document.createElement('canvas'); cv.width = NY; cv.height = NX;
+  const g = cv.getContext('2d'), img = g.createImageData(NY, NX), d = img.data;
+  for (let py = 0; py < NX; py++) for (let px = 0; px < NY; px++) fill(py, NY - 1 - px, d, (py * NY + px) * 4);
+  g.putImageData(img, 0, 0); return cv;
+}
+function buildBodyImg() {
+  bodyImg = gridImage((i, j, d, o) => {
+    const z = zRef[j * NX + i];
+    if (z > 0.6) {
+      const n = normalAt(i, j), lam = Math.max(0, n[0] * LIGHT[0] + n[1] * LIGHT[1] + n[2] * LIGHT[2]), sh = 0.32 + 0.68 * lam, t = clamp(z / 250, 0, 1);
+      d[o] = (150 + 40 * t) * sh; d[o + 1] = (128 + 28 * t) * sh; d[o + 2] = (110 + 22 * t) * sh; d[o + 3] = 255;
+    } else { d[o] = 32; d[o + 1] = 44; d[o + 2] = 52; d[o + 3] = 255; }
+  });
+}
+function buildRoiImg() { roiImg = gridImage((i, j, d, o) => { if (S.mask[j * NX + i]) { d[o] = 96; d[o + 1] = 214; d[o + 2] = 198; d[o + 3] = 135; } }); }
+function buildWashImg(scale) {
+  const fit = lastFit, Rm = fit.M.R, tm = fit.M.t, Rc = fit.T.R, tc = fit.T.t, c = fit.c;
+  washImg = gridImage((i, j, d, o) => {
+    if (!S.mask[j * NX + i]) return;
+    const x = G.x0 + i * DX, y = G.y0 + j * DX, z0 = zRef[j * NX + i], dz = fit.Hlive(x, y) - Href(x, y), p = Float64Array.from([x, y, z0 + dz]);
+    C.applyMotion(p, Rm, tm, c); C.applyMotion(p, Rc, tc, c);
+    const n = normalAt(i, j), v = (p[0] - x) * n[0] + (p[1] - y) * n[1] + (p[2] - z0) * n[2], col = washColor(v, scale);
+    const lam = Math.max(0, n[0] * LIGHT[0] + n[1] * LIGHT[1] + n[2] * LIGHT[2]), sh = 0.45 + 0.55 * lam;
+    d[o] = col[0] * sh; d[o + 1] = col[1] * sh; d[o + 2] = col[2] * sh; d[o + 3] = 255;
+  });
+}
+
+/* ---------------------------------------------------------------- 3D view */
+function makeView(w, h, box, zmin, zmax, yaw, pitch) {
+  const xc = (box[0] + box[1]) / 2, yc = (box[2] + box[3]) / 2, zc = (zmin + zmax) / 2;
+  const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const raw = (x, y, z) => { x -= xc; y -= yc; z -= zc; const xr = x * cy - y * sy, yr = x * sy + y * cy; return [-yr, -(z * cp - xr * sp), -xr * cp - z * sp]; };
+  let b = [Infinity, -Infinity, Infinity, -Infinity];
+  for (const x of [box[0], box[1]]) for (const y of [box[2], box[3]]) for (const z of [zmin, zmax]) { const r = raw(x, y, z); b = [Math.min(b[0], r[0]), Math.max(b[1], r[0]), Math.min(b[2], r[1]), Math.max(b[3], r[1])]; }
+  const pad = 30, sc = Math.min((w - 2 * pad) / Math.max(1e-6, b[1] - b[0]), (h - 2 * pad) / Math.max(1e-6, b[3] - b[2]));
+  const ox = w / 2 - (b[0] + b[1]) / 2 * sc, oy = h / 2 - (b[2] + b[3]) / 2 * sc;
+  const proj = (x, y, z) => { const r = raw(x, y, z); return [ox + r[0] * sc, oy + r[1] * sc, r[2]]; };
+  // screen -> world along the viewing ray, parameterised by depth d
+  const unproject = (px, py, d) => {
+    const u = (px - ox) / sc, m = (py - oy) / sc;       // u = -yr ; m = -(z cp - xr sp)
+    const xr = sp * m - cp * d, z = -cp * m - sp * d, yr = -u;
+    return [xr * cy + yr * sy + xc, -xr * sy + yr * cy + yc, z + zc];
+  };
+  return { proj, unproject, sc, dmin: -Math.hypot(box[1] - box[0], box[3] - box[2], zmax - zmin), dmax: Math.hypot(box[1] - box[0], box[3] - box[2], zmax - zmin) };
+}
+function canvasAspect() { const cv = $('#v3d'); return Math.max(1, (cv.clientWidth || 1200) / (cv.clientHeight || 600)); }
+function viewBox() {
+  const v = S.view, hy = v.span / 2, hx = Math.min(300, hy / canvasAspect() * 1.15);
+  const cx = hx >= 300 ? 0 : clamp(v.cx, G.x0 + hx, G.x1 - hx), cy = hy >= 1000 ? 0 : clamp(v.cy, G.y0 + hy, G.y1 - hy);
+  return [cx - hx, cx + hx, cy - hy, cy + hy];
+}
+function setView(p) { Object.assign(S.view, p); S.view.span = clamp(S.view.span, 120, 2000); S.view.pitch = clamp(S.view.pitch, 0.15, Math.PI / 2); local3d = null; draw3D(); }
+function zoomToRoi() {
+  if (!ref) { setView({ cx: 0, cy: 0, span: 2000 }); return; }
+  const w = (ref.N - 1) * DX, h = (ref.M - 1) * DX, cx = ref.x0 + w / 2, cy = ref.y0 + h / 2;
+  setView({ cx, cy, span: Math.max(240, h + 160, (w + 160) * canvasAspect() / 1.15) });
+}
+function zAt(x, y) { // bilinear on the reference grid
+  const fi = clamp((x - G.x0) / DX, 0, NX - 1.0001), fj = clamp((y - G.y0) / DX, 0, NY - 1.0001);
+  const i = Math.floor(fi), j = Math.floor(fj), u = fi - i, v = fj - j;
+  return zRef[j * NX + i] * (1 - u) * (1 - v) + zRef[j * NX + i + 1] * u * (1 - v) + zRef[(j + 1) * NX + i] * (1 - u) * v + zRef[(j + 1) * NX + i + 1] * u * v;
+}
+function inMask(x, y) { const i = Math.round((x - G.x0) / DX), j = Math.round((y - G.y0) / DX); return i >= 0 && i < NX && j >= 0 && j < NY && S.mask[j * NX + i] === 1; }
+function buildLocal3d() {
+  const box = viewBox(), span = Math.max(box[1] - box[0], box[3] - box[2]), st = Math.max(4, span / 170);
+  const nx = Math.max(6, Math.round((box[1] - box[0]) / st)), ny = Math.max(6, Math.round((box[3] - box[2]) / st));
+  const Z = new Float64Array((nx + 1) * (ny + 1)); let zmin = Infinity, zmax = -Infinity;
+  for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) { const z = zAt(box[0] + i * (box[1] - box[0]) / nx, box[2] + j * (box[3] - box[2]) / ny); Z[j * (nx + 1) + i] = z; if (z < zmin) zmin = z; if (z > zmax) zmax = z; }
+  local3d = { box, nx, ny, Z, zmin, zmax: Math.max(zmax, zmin + 20), wash: null };
+}
+/* residual field after fitting: what the console colourwash would show */
+function residualField(fit) {
+  const L = local3d, out = new Float64Array(L.nx * L.ny), box = L.box, Rm = fit.M.R, tm = fit.M.t, Rc = fit.T.R, tc = fit.T.t, c = fit.c;
+  for (let j = 0; j < L.ny; j++) for (let i = 0; i < L.nx; i++) {
+    const x = box[0] + (i + .5) * (box[1] - box[0]) / L.nx, y = box[2] + (j + .5) * (box[3] - box[2]) / L.ny;
+    if (!inMask(x, y)) { out[j * L.nx + i] = NaN; continue; }
+    const z0 = zAt(x, y), dz = fit.Hlive(x, y) - Href(x, y);
+    const p = Float64Array.from([x, y, z0 + dz]);
+    C.applyMotion(p, Rm, tm, c); C.applyMotion(p, Rc, tc, c);
+    const gi = clamp(Math.round((x - G.x0) / DX), 0, NX - 1), gj = clamp(Math.round((y - G.y0) / DX), 0, NY - 1), n = normalAt(gi, gj);
+    out[j * L.nx + i] = (p[0] - x) * n[0] + (p[1] - y) * n[1] + (p[2] - z0) * n[2];
+  }
+  return out;
+}
+function washColor(v, scale) {
+  const t = clamp(v / scale, -1, 1), a = [61, 156, 98], b = t < 0 ? [47, 111, 224] : [224, 74, 48], u = Math.min(1, Math.abs(t));
+  return [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u, a[2] + (b[2] - a[2]) * u];
+}
+let view3d = null;
+function draw3D() {
+  const cv = $('#v3d'), dpr = Math.min(window.devicePixelRatio || 1, 2), W = cv.clientWidth || 1200, H = cv.clientHeight || W / 2.1;
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.fillStyle = '#0b1820'; g.fillRect(0, 0, W, H);
+  if (!local3d) buildLocal3d();
+  const L = local3d, box = L.box, nx = L.nx, ny = L.ny, Wd = nx + 1;
+  const showFit = S.v3d === 'fit' && lastFit;
+  if (showFit && !L.wash) L.wash = residualField(lastFit);
+  const view = makeView(W, H, box, L.zmin, L.zmax, S.view.yaw, S.view.pitch); view3d = view;
+  const P = new Array(Wd * (ny + 1)), dx = (box[1] - box[0]) / nx, dy = (box[3] - box[2]) / ny;
+  for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) P[j * Wd + i] = view.proj(box[0] + i * dx, box[2] + j * dy, L.Z[j * Wd + i]);
+  const q = [], scale = showFit ? Math.max(1, Math.min(5, lastFit.scale || 3)) : 3;
+  const overhead = Math.abs(S.view.pitch - Math.PI / 2) < 1e-6 && Math.abs(S.view.yaw) < 1e-6;
+  if (overhead) {
+    if (!bodyImg) buildBodyImg(); if (!roiImg) buildRoiImg(); if (showFit && !washImg) buildWashImg(scale);
+    const tl = view.proj(G.x0 - DX / 2, G.y1 + DX / 2, 0), iw = (G.y1 - G.y0 + DX) * view.sc, ih = (G.x1 - G.x0 + DX) * view.sc;
+    g.imageSmoothingEnabled = true;
+    g.drawImage(bodyImg, tl[0], tl[1], iw, ih); g.drawImage(roiImg, tl[0], tl[1], iw, ih); if (showFit) g.drawImage(washImg, tl[0], tl[1], iw, ih);
+  } else
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const a = j * Wd + i, b = a + 1, c2 = a + Wd + 1, d = a + Wd;
+    const hx = ((L.Z[b] - L.Z[a]) + (L.Z[c2] - L.Z[d])) / (2 * dx), hy = ((L.Z[d] - L.Z[a]) + (L.Z[c2] - L.Z[b])) / (2 * dy), ln = Math.hypot(hx, hy, 1);
+    const lam = Math.max(0, (-hx * LIGHT[0] - hy * LIGHT[1] + LIGHT[2]) / ln), s = .32 + .68 * lam;
+    const x = box[0] + (i + .5) * dx, y = box[2] + (j + .5) * dy, zq = (L.Z[a] + L.Z[b] + L.Z[c2] + L.Z[d]) / 4, inR = inMask(x, y);
+    let base;
+    if (showFit && inR) { const v = L.wash[j * nx + i]; base = Number.isFinite(v) ? washColor(v, scale) : [120, 120, 120]; }
+    else if (zq < 0.6) base = inR ? [70, 150, 140] : [32, 44, 52];
+    else base = inR ? [96, 214, 198] : [150, 128, 110];
+    q.push({ depth: (P[a][2] + P[b][2] + P[c2][2] + P[d][2]) / 4, a, b, c: c2, d, col: 'rgb(' + (base[0] * s | 0) + ',' + (base[1] * s | 0) + ',' + (base[2] * s | 0) + ')' });
+  }
+  q.sort((u, v) => v.depth - u.depth);
+  g.lineWidth = .7;
+  for (const t of q) { g.fillStyle = t.col; g.strokeStyle = t.col; g.beginPath(); g.moveTo(P[t.a][0], P[t.a][1]); g.lineTo(P[t.b][0], P[t.b][1]); g.lineTo(P[t.c][0], P[t.c][1]); g.lineTo(P[t.d][0], P[t.d][1]); g.closePath(); g.fill(); g.stroke(); }
+  // ROI outline on the surface (overhead only: in 3D the tint marks the ROI and an outline would show through ridges)
+  g.strokeStyle = '#8af0dc'; g.lineWidth = 1.3; g.beginPath();
+  const cs = DX, i0 = Math.max(0, Math.floor((box[0] - G.x0) / DX)), i1 = Math.min(NX - 1, Math.ceil((box[1] - G.x0) / DX)), j0 = Math.max(0, Math.floor((box[2] - G.y0) / DX)), j1 = Math.min(NY - 1, Math.ceil((box[3] - G.y0) / DX));
+  const lift = 0.8, pr = (x, y) => view.proj(x, y, zAt(clamp(x, G.x0, G.x1), clamp(y, G.y0, G.y1)) + lift);
+  if (overhead) for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+    if (!S.mask[j * NX + i]) continue;
+    const x = G.x0 + i * DX, y = G.y0 + j * DX;
+    if (i === 0 || !S.mask[j * NX + i - 1]) { const p = pr(x - cs / 2, y - cs / 2), q2 = pr(x - cs / 2, y + cs / 2); g.moveTo(p[0], p[1]); g.lineTo(q2[0], q2[1]); }
+    if (i === NX - 1 || !S.mask[j * NX + i + 1]) { const p = pr(x + cs / 2, y - cs / 2), q2 = pr(x + cs / 2, y + cs / 2); g.moveTo(p[0], p[1]); g.lineTo(q2[0], q2[1]); }
+    if (j === 0 || !S.mask[(j - 1) * NX + i]) { const p = pr(x - cs / 2, y - cs / 2), q2 = pr(x + cs / 2, y - cs / 2); g.moveTo(p[0], p[1]); g.lineTo(q2[0], q2[1]); }
+    if (j === NY - 1 || !S.mask[(j + 1) * NX + i]) { const p = pr(x - cs / 2, y + cs / 2), q2 = pr(x + cs / 2, y + cs / 2); g.moveTo(p[0], p[1]); g.lineTo(q2[0], q2[1]); }
+  }
+  g.stroke();
+  // rectangle in progress
+  if (rectDrag) {
+    const r = rectDrag, xs = [Math.min(r.x0, r.x1), Math.max(r.x0, r.x1)], ys = [Math.min(r.y0, r.y1), Math.max(r.y0, r.y1)];
+    g.strokeStyle = '#ffe08a'; g.setLineDash([5, 4]); g.lineWidth = 1.5; g.beginPath();
+    const corners = [[xs[0], ys[0]], [xs[1], ys[0]], [xs[1], ys[1]], [xs[0], ys[1]], [xs[0], ys[0]]];
+    corners.forEach((c2, k) => { const p = pr(c2[0], c2[1]); k ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]); }); g.stroke(); g.setLineDash([]);
+  }
+  // brush cursor
+  if (hover && (S.tool === 'brush' || S.tool === 'erase')) {
+    g.strokeStyle = S.tool === 'erase' ? '#ff9f8a' : '#ffffff'; g.lineWidth = 1.2; g.globalAlpha = .85; g.beginPath();
+    for (let k = 0; k <= 36; k++) { const a = k / 36 * Math.PI * 2, p = pr(hover[0] + S.brush * Math.cos(a), hover[1] + S.brush * Math.sin(a)); k ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]); }
+    g.stroke(); g.globalAlpha = 1;
+  }
+  // orientation labels
+  g.font = '600 11px ' + getComputedStyle(document.body).fontFamily; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#d7e6ec';
+  for (const [x, y, txt] of [[0, 985, 'head'], [0, -985, 'feet'], [292, 560, 'R'], [-292, 560, 'L']]) {
+    if (x < box[0] - 20 || x > box[1] + 20 || y < box[2] - 20 || y > box[3] + 20) continue;
+    const p = view.proj(x, y, 2); if (p[0] < 10 || p[0] > W - 10 || p[1] < 10 || p[1] > H - 10) continue;
+    g.fillText(txt, p[0], p[1]);
+  }
+  // axis triad
+  const o = view.proj(box[0], box[2], L.zmin), dirs = [[40, 0, 0, 'X', AXES[0].col], [0, 40, 0, 'Y head', AXES[1].col], [0, 0, 40, 'Z', AXES[2].col]];
+  g.font = '600 10px ' + getComputedStyle(document.body).fontFamily; g.textBaseline = 'middle';
+  const base = [96, H - 34];
+  for (const d of dirs) {
+    const e = view.proj(box[0] + d[0], box[2] + d[1], L.zmin + d[2]), vx = e[0] - o[0], vy = e[1] - o[1], l = Math.hypot(vx, vy) || 1;
+    const q2 = [base[0] + vx / l * 26, base[1] + vy / l * 26];
+    g.strokeStyle = d[4]; g.lineWidth = 1.6; g.beginPath(); g.moveTo(base[0], base[1]); g.lineTo(q2[0], q2[1]); g.stroke();
+    g.fillStyle = d[4]; g.textAlign = vx > 4 ? 'left' : vx < -4 ? 'right' : 'center'; g.fillText(d[3], q2[0] + vx / l * 6, q2[1] + vy / l * 7);
+  }
+  const nice = [10, 20, 50, 100, 200, 500].find(l => l * view.sc > 60) || 500, sb = nice * view.sc;
+  g.strokeStyle = '#9db3bf'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(W - 16 - sb, H - 16); g.lineTo(W - 16, H - 16); g.stroke();
+  g.fillStyle = '#9db3bf'; g.textAlign = 'center'; g.fillText(nice + ' mm', W - 16 - sb / 2, H - 27);
+  $('#v3dLegend').hidden = !showFit;
+  if (showFit) $('#v3dScale').textContent = '±' + nf(scale, 1) + ' mm';
+  $('#v3dHint').hidden = !(S.v3d === 'fit' && !lastFit);
+  $('#v3dHint').textContent = 'Run a test first; the mismatch after fitting appears here.';
+}
+function pick3D(px, py) {
+  if (!view3d || !local3d) return null;
+  const v = view3d, L = local3d, steps = 160;
+  for (let k = 0; k <= steps; k++) {
+    const d = v.dmin + (v.dmax - v.dmin) * k / steps, p = v.unproject(px, py, d);
+    if (p[0] < L.box[0] || p[0] > L.box[1] || p[1] < L.box[2] || p[1] > L.box[3]) continue;
+    if (p[2] <= zAt(p[0], p[1])) return [p[0], p[1]];
+  }
+  return null;
+}
+
+/* ---------------------------------------------------------------- lights */
+function lightClass(k) {
+  if (!lights) return ['', '—'];
+  if (lights.solvable[k] < 0.02) return ['none', 'blind'];
+  if (k === 2) return [lights.nzMean > 0.45 ? 'good' : 'weak', lights.nzMean > 0.45 ? 'sees it' : 'oblique'];
+  if (k < 2) { const a = k === 0 ? topo.angX : topo.angY; return a < 1.2 ? ['none', 'blind'] : a < 12 ? ['weak', 'weak'] : ['good', 'sees it']; }
+  const s = lights.sigma[k]; return s < 0.1 ? ['good', 'sees it'] : s < 0.5 ? ['weak', 'weak'] : ['none', 'blind'];
+}
+function renderLights() {
+  const host = $('#lights'); let h = '';
+  for (let k = 0; k < S.dof; k++) {
+    const [cls, tag] = lightClass(k), a = AXES[k];
+    let sub = '';
+    if (lights) {
+      if (k < 2) sub = nf(k === 0 ? topo.angX : topo.angY, 0) + '° angle change';
+      else if (k === 2) sub = 'surface faces the camera';
+      else sub = '±' + nf(lights.sigma[k], 2) + '° from noise';
+    }
+    h += '<div class="light ' + cls + '"><span class="dot"></span><span class="lab"><b>' + (lights ? tag : '—') + '</b>' + a.name + '<small>' + sub + '</small></span></div>';
+  }
+  host.innerHTML = h;
+  $('#lightsNote').textContent = lights ? Math.round(ref.area / 100) + ' cm² · centre ' + signed(ref.cx, 0) + ', ' + signed(ref.cy, 0) + ' mm · ' + lights.nPts + ' camera points' : 'no ROI yet — paint one';
+  
+}
+
+/* ---------------------------------------------------------------- known-shift test */
+function trueMotion() {
+  const t = [S.shift[0], S.shift[1], S.shift[2]], R = S.dof === 6 ? C.rotFromDeg(S.shift[3], S.shift[4], S.shift[5]) : [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  return { R, t, ang: S.dof === 6 ? [S.shift[3], S.shift[4], S.shift[5]] : [0, 0, 0] };
+}
+function runShift() {
+  if (!ref) { shiftResult = null; return; }
+  const c = [ref.cx, ref.cy, ref.cz], M = trueMotion(), truth6 = M.t.concat(M.ang);
+  const dets = [], rmss = [], errs3 = []; let fit0 = null, H0 = null, fails = 0, pts = 0;
+  for (let d = 0; d < DAYS; d++) {
+    const Hd = dayBody(Hlive, d), rng = C.mulberry32(SEED * 7919 + 11 + d * 613), gs = C.makeGauss(rng);
+    const live = C.sampleLive(S.mask, Hd, rng); pts = live.length / 3;
+    C.applyMotion(live, M.R, M.t, c);
+    for (let p = 2; p < live.length; p += 3) live[p] += gs() * NOISE;
+    const r = C.registerICP(ref, live, { dof: S.dof });
+    if (r.failed) fails++;
+    dets.push(r.det6); rmss.push(r.rms); errs3.push(norm3([0, 1, 2].map(k => truth6[k] - r.det6[k])));
+    if (d === 0) { fit0 = r; H0 = Hd; }
+  }
+  const mean = a => a.reduce((s, v) => s + v, 0) / a.length, rms = a => Math.sqrt(a.reduce((s, v) => s + v * v, 0) / a.length);
+  const det = [0, 1, 2, 3, 4, 5].map(k => mean(dets.map(v => v[k])));
+  const err = [0, 1, 2, 3, 4, 5].map(k => rms(dets.map(v => truth6[k] - v[k])));
+  const spread = [0, 1, 2, 3, 4, 5].map(k => rms(dets.map(v => v[k] - det[k])));
+  shiftResult = { truth: truth6, det, err, spread, left: truth6.map((v, k) => v - det[k]), rms: mean(rmss.filter(Number.isFinite)), err3: rms(errs3), worst3: Math.max(...errs3), pts, fit: fit0, fails, days: DAYS, dets };
+  lastFit = { M: { R: M.R, t: M.t }, T: fit0.correction, c, Hlive: H0, scale: Math.max(1, Math.min(5, Math.ceil(Math.max(shiftResult.err3, 1)))) };
+  if (local3d) local3d.wash = null; washImg = null;
+}
+function axisClass(k, applied, found, err) {
+  const isRot = k >= 3, A = Math.abs(applied), F = Math.abs(found), tol = isRot ? 0.25 : 0.5, tiny = isRot ? 0.03 : 0.05;
+  if (A < tiny && err < 1.6 * tol && F < tol) return ['idle', 'no motion'];
+  if (A < tiny) return ['bad', 'false shift'];
+  if (err < tol) return ['good', 'found'];
+  if (F < 0.15 * A) return ['bad', 'not seen'];
+  if (Math.abs(applied - found) < 0.5 * err) return [err < 0.6 * A ? 'warn' : 'bad', 'varies day to day'];
+  if (err < 0.5 * A) return ['warn', 'partly found'];
+  return ['bad', 'mostly missed'];
+}
+function axisTile(k, applied, found, err, spread) {
+  const a = AXES[k], [cls, badge] = axisClass(k, applied, found, err);
+  const sub = 'applied ' + signed(applied, 1) + ' ' + a.unit + ' · reported ' + signed(found, 1) + (spread > 0.05 ? ' ± ' + nf(spread, 1) : '') + ' ' + a.unit + '<br>' + (cls === 'idle' ? 'nothing to find' : 'typical error left after correction');
+  return tile(a.name, cls === 'idle' ? '0.0<small>' + a.unit + '</small>' : nf(err, 1) + '<small>' + a.unit + '</small>', sub, cls, badge);
+}
+function tile(label, value, sub, cls = '', badge = '') {
+  return '<div class="reading ' + cls + '"><div class="label">' + label + (badge ? '<span class="badge">' + badge + '</span>' : '') + '</div><div class="value">' + value + '</div><div class="sub">' + sub + '</div></div>';
+}
+function renderShift() {
+  const r = shiftResult;
+  $('#monChart').hidden = true;
+  if (!r) { showEmpty(ref ? 'Set a shift to test this ROI.' : 'Draw an ROI first — paint on the camera view or pick a starting point.'); return; }
+  let t = '';
+  for (let k = 0; k < S.dof; k++) t += axisTile(k, r.truth[k], r.det[k], r.err[k], r.spread[k]);
+  const l3 = r.err3;
+  t += tile('Surface match after fitting', mm(r.rms, 2), r.rms < 1.0 ? 'looks fine to the system' : 'a mismatch the system can see', r.rms < 1.0 ? 'teal' : 'warn');
+  t += tile('3D error left on the patient', mm(l3, 1), (r.fails ? r.fails + ' of ' + r.days + ' days failed to register · ' : '') + 'typical over ' + r.days + ' days · worst day ' + mm(r.worst3, 1), l3 < 0.6 ? 'good' : l3 < 1.5 ? 'warn' : 'bad');
+  $('#tiles').innerHTML = t; $('#resultsEmpty').hidden = true; $('#notice').hidden = false;
+  $('#resultNote').textContent = 'known shift · ' + r.days + ' days · ' + (S.dof === 6 ? '6 DoF' : 'translations only') + ' · variation ' + nf(S.vary, 1) + ' mm' + (todayActive() ? ' · today\'s surface differs' : '');
+  const [ot, ox, wt, wx] = noticeShift(r);
+  $('#obsTitle').textContent = ot; $('#obsText').textContent = ox; $('#whyTitle').textContent = wt; $('#whyText').textContent = wx;
+  $('#details').innerHTML = detailsShift(r);
+}
+function showEmpty(msg) {
+  $('#tiles').innerHTML = ''; $('#notice').hidden = true; $('#resultsEmpty').hidden = false; $('#resultsEmpty').textContent = msg; $('#resultNote').textContent = ''; $('#details').innerHTML = '';
+}
+function noticeShift(r) {
+  const cls = [], names = [];
+  for (let k = 0; k < S.dof; k++) {
+    const c2 = axisClass(k, r.truth[k], r.det[k], r.err[k])[1];
+    cls.push(c2 === 'no motion' ? 'idle' : c2 === 'false shift' ? 'false' : c2 === 'found' ? 'found' : c2 === 'not seen' ? 'blind' : 'partly'); names.push(AXES[k].long);
+  }
+  const pick = c => names.filter((_, k) => cls[k] === c);
+  const blind = pick('blind'), partly = pick('partly'), falseS = pick('false'), found = pick('found');
+  const moved = cls.some(c => c !== 'idle' && c !== 'false');
+  const matchTxt = 'The surface match after fitting is ' + mm(r.rms, 2) + (r.rms < 1.0 ? ' — it looks fine.' : '.');
+  if (!moved && !falseS.length) return ['No motion applied.', 'Move one or more sliders to shift the patient, then see which directions this ROI finds.', 'What the test does', 'The patient is moved by a known amount, the camera captures the surface inside the ROI, and the system registers it to the reference. What it reports is compared with what was really done.'];
+  if (blind.length) return [
+    'Motion in ' + blind.join(' and ') + ' is not seen.',
+    'The patient moved ' + blind.map(n => signed(r.truth[names.indexOf(n)], 1) + ' ' + (names.indexOf(n) >= 3 ? '°' : 'mm') + ' in ' + n).join(' and ') + ', but the system reported almost nothing for it. ' + matchTxt,
+    'The ROI slides along itself',
+    'Moving the patient in that direction does not change the shape the camera sees inside this ROI, so every position fits equally well and the solver has no reason to prefer the right one. Include anatomy whose slope changes in that direction — a curve, an edge, a feature — and the light turns green.'];
+  if (falseS.length) {
+    const weakAx = falseS.filter(n => { const k = names.indexOf(n); return lights && k < S.dof && lightClass(k)[0] !== 'good'; });
+    if (weakAx.length) return [
+      'A large false shift in ' + weakAx.join(' and ') + ' — the weak direction.',
+      'The patient did not move that way, yet the system reports ' + weakAx.map(n => signed(r.det[names.indexOf(n)], 1) + ' ± ' + nf(r.spread[names.indexOf(n)], 1) + (names.indexOf(n) >= 3 ? '°' : ' mm')).join(', ') + '. ' + matchTxt,
+      'Surface change is explained as a slide along the surface',
+      'This ROI has little shape variation in ' + weakAx.join(' and ') + ' (see the light above): the surface there is close to a gentle incline. A few millimetres of surface change on an incline is indistinguishable from sliding the patient a long way along it, so the fit chooses the slide. Move or enlarge the ROI until that light is green and the same change shows up as the small vertical lift it really is.'];
+  }
+  if (falseS.length) return [
+    'A false shift in ' + falseS.join(' and ') + '.',
+    'The patient did not move that way, yet the system reports ' + falseS.map(n => signed(r.det[names.indexOf(n)], 1) + (names.indexOf(n) >= 3 ? '°' : ' mm')).join(', ') + '. ' + matchTxt,
+    'The surface changed, so the fit invents motion',
+    'The registration can only match shapes. Where today\'s surface differs from the reference, the best-fitting position is no longer the true one: part of the shape change is absorbed into the reported shift. ' + (S.today.swell > 0 ? 'A small ROI over the swelling reports most of its height as a vertical shift; a large ROI dilutes it with surface that has not changed. Try both sizes with the same swelling.' : 'More shape variation in the ROI, or a surface that has not changed, makes this smaller.')];
+  if (partly.length) return [
+    'Only part of the motion in ' + partly.join(' and ') + ' is found.',
+    'Typically ' + partly.map(n => nf(r.err[names.indexOf(n)], 1) + (names.indexOf(n) >= 3 ? '°' : ' mm') + ' of ' + n).join(' and ') + ' is left on the patient after the correction, and it differs from day to day. ' + matchTxt,
+    'Weak information in that direction',
+    (() => { const inPlane = partly.filter(n => n !== AXES[2].long), hasZ = partly.includes(AXES[2].long); let s = '';
+      if (inPlane.length) s += 'This ROI has only a little shape variation in ' + inPlane.join(' and ') + ', so the small everyday surface change (' + nf(S.vary, 1) + ' mm RMS) is enough to pull the answer around: a different error every day, with the match still looking acceptable. Include anatomy whose slope changes in that direction. ';
+      if (hasZ) s += 'For up–down, a small ROI cannot tell a local change of the surface from a lift of the whole patient, so it reports the local change; a larger ROI averages it out. ';
+      return s + 'Set the variation to 0 to confirm that the geometry alone would have found the shift.'; })()];
+  const worst = Math.max(...r.err.slice(0, 3));
+  return [
+    'All applied motion is found, to within ' + mm(worst, 1) + ' on a typical day.',
+    'The system reported the shift' + (S.dof === 6 ? ' and the rotations' : '') + ' correctly on every one of the ' + r.days + ' days, despite the everyday surface variation. ' + matchTxt,
+    todayActive() ? 'Enough shape, even with a changed surface' : 'Enough shape variation in every direction',
+    todayActive() ? 'The surface change you set is small compared with the shape information in this ROI, so the fit still lands on the true position. Push the change further, or shrink the ROI onto a smoother patch, and watch the error grow.' : 'Every direction of motion changes what the camera sees inside this ROI. Now open "Today\'s surface differs" and see how much surface change this ROI can tolerate before the answer drifts.'];
+}
+function tbl(head, rows) { return '<div class="tblwrap"><table><thead><tr>' + head.map(v => '<th>' + v + '</th>').join('') + '</tr></thead><tbody>' + rows.map(r => '<tr>' + r.map(v => '<td>' + v + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>'; }
+function bodyDesc() {
+  const p = S.patient, t = S.today, parts = ['arms ' + (p.armAngle < 10 ? 'by the sides' : p.armAngle > 140 ? 'up' : p.armAngle + '°'), 'breasts L ' + nf(p.breastL, 1) + ' / R ' + nf(p.breastR, 1), 'skin detail ' + nf(p.detail, 2) + ' mm'];
+  const tp = []; if (t.arm) tp.push('arm ' + signed(t.arm, 0) + '°'); if (t.head) tp.push('head turned ' + signed(t.head, 0) + '°'); if (t.breast) tp.push('breast ' + signed(t.breast, 0) + '%'); if (t.abd) tp.push('abdomen ' + signed(t.abd, 0) + ' mm'); if (t.swell) tp.push('swelling ' + nf(t.swell, 1) + ' mm under the ROI');
+  return '<p><b>Patient.</b> ' + parts.join(' · ') + '. <b>Today versus reference:</b> ' + (tp.length ? tp.join(', ') : 'identical') + '.</p>';
+}
+function detailsShift(r) {
+  const head = ['', ...AXES.slice(0, S.dof).map(a => a.k + ' (' + a.unit + ')')];
+  let m = tbl(head, [['Applied', ...r.truth.slice(0, S.dof).map(v => signed(v, 2))], ['Reported, mean of ' + r.days + ' days', ...r.det.slice(0, S.dof).map(v => signed(v, 2))], ['Day-to-day spread (1 SD)', ...r.spread.slice(0, S.dof).map(v => nf(v, 2))], ['Typical error (RMS)', ...r.err.slice(0, S.dof).map(v => nf(v, 2))]]);
+  m += tbl(['Day', ...AXES.slice(0, S.dof).map(a => 'reported ' + a.k)], r.dets.map((d, i) => [String(i + 1), ...d.slice(0, S.dof).map(v => signed(v, 2))]));
+  m += '<p>Each day adds a smooth random surface change of ' + nf(S.vary, 1) + ' mm RMS (35 mm length scale) to the live capture before the shift is applied, so the ' + r.days + ' days differ only in that change and in camera noise. ' + r.pts + ' camera points inside the ROI (one per 16 mm², capped at 3000), 0.3 mm noise per point along the camera axis. ' + r.fit.iters + ' iterations on day 1, ' + r.fit.status.toLowerCase() + '. Surface match is the point-to-plane RMS over the matched points after trimming the worst 10 %.</p>';
+  m += lightsDetail();
+  m += bodyDesc();
+  m += '<p><b>Method.</b> The reference is the surface inside your ROI on the reference day. Today\'s surface is captured as jittered points, moved by the applied shift' + (S.dof === 6 ? ' and rotation about the ROI centre' : '') + ', and registered with point-to-plane ICP (nearest vertex, worst 10 % trimmed, eigenvalue cut-off 10⁻⁴). Directions below the cut-off are left at zero rather than amplified. The reported motion is the inverse of the correction.</p>';
+  return m;
+}
+function lightsDetail() {
+  if (!lights) return '';
+  const rows = [];
+  for (let k = 0; k < S.dof; k++) rows.push([AXES[k].name, k < 2 ? nf(k === 0 ? topo.angX : topo.angY, 1) + '°' : k === 2 ? '⟨n_z⟩ ' + nf(lights.nzMean, 2) : '—', '±' + nf(lights.sigma[k], k >= 3 ? 3 : 3) + (k >= 3 ? '°' : ' mm'), nf(lights.solvable[k], 2)]);
+  return '<p><b>What the ROI can see.</b> Angle change is the standard deviation of the surface slope angle across the ROI in that direction: a tilted plane scores zero, a curve or a feature scores high. The noise column is the 1 SD uncertainty from 0.3 mm camera noise alone with ' + lights.nPts + ' points; it excludes surface change. Solvable is the fraction of that direction inside the subspace the normal matrix can resolve.</p>' +
+    tbl(['Direction', 'Angle change / facing', 'Noise-only 1 SD', 'Solvable'], rows) + '<p>Height SD inside the ROI ' + nf(topo.hSD, 1) + ' mm; ' + ref.count + ' usable reference vertices.</p>';
+}
+
+/* ---------------------------------------------------------------- monitoring test */
+function runMonitoring() {
+  if (!ref || monRunning) return;
+  monRunning = true; $('#runMon').disabled = true; $('#runMon').textContent = 'Running…';
+  const c = [ref.cx, ref.cy, ref.cz], m = S.mon, DT = 0.5, NF = 121, frames = [], T = 4.0, dof = S.dof;
+  const ed = [0, 0, 0], es = [0, 0, 0]; ed[m.driftAxis] = m.drift; es[m.stepAxis] = m.step;
+  let prev = null, f = 0;
+  const HliveNow = dayBody(Hlive, 0);
+  function frameBody(t) { const amp = m.breath * (1 - Math.cos(2 * Math.PI * t / T)) / 2; return (x, y) => HliveNow(x, y) + amp * C.breathWeight(x, y); }
+  function step() {
+    const t0 = performance.now();
+    while (f < NF && performance.now() - t0 < 40) {
+      const t = f * DT, truth = [0, 1, 2].map(k => ed[k] * t / 60 + (t >= 35 ? es[k] : 0));
+      const rng = C.mulberry32(SEED * 1000003 + f * 7919 + 13), gs = C.makeGauss(rng), Hb = frameBody(t);
+      const live = C.sampleLive(S.mask, Hb, rng);
+      C.applyMotion(live, [[1, 0, 0], [0, 1, 0], [0, 0, 1]], truth, c);
+      for (let p = 2; p < live.length; p += 3) live[p] += gs() * NOISE;
+      const r = C.registerICP(ref, live, { dof, iters: prev ? 30 : 60, init: prev });
+      if (!r.failed) prev = { R: r.correction.R, t: r.correction.t };
+      frames.push({ t, truth, det: r.det6, rms: r.rms, failed: r.failed, Hb, corr: r.correction });
+      f++;
+    }
+    $('#monStatus').textContent = 'Registering… ' + Math.round(100 * f / NF) + ' %';
+    if (f < NF) { setTimeout(step, 0); return; }
+    monRunning = false; $('#runMon').disabled = false; $('#runMon').textContent = 'Run 60 s of treatment';
+    $('#monStatus').textContent = 'Done. Change a setting and run again.';
+    monResult = analyseMon(frames, m);
+    const last = frames[frames.length - 1];
+    lastFit = { M: { R: [[1, 0, 0], [0, 1, 0], [0, 0, 1]], t: last.truth }, T: last.corr, c, Hlive: last.Hb, scale: 3 };
+    if (local3d) local3d.wash = null; washImg = null;
+    renderMon(); if (S.v3d === 'fit') draw3D();
+  }
+  setTimeout(step, 10);
+}
+function analyseMon(frames, m) {
+  // per axis: least-squares fit reported = a + b t + c H(t-35); residual = apparent motion from breathing + noise
+  const n = frames.length, per = [];
+  for (let k = 0; k < 3; k++) {
+    let Sxx = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], Sxy = [0, 0, 0];
+    for (const fr of frames) { const x = [1, fr.t, fr.t >= 35 ? 1 : 0], y = fr.det[k]; for (let a = 0; a < 3; a++) { Sxy[a] += x[a] * y; for (let b = 0; b < 3; b++) Sxx[a][b] += x[a] * x[b]; } }
+    const coef = C.matVec(C.pinvSym(Sxx, 1e-12).M, Sxy);
+    let ss = 0, peak = 0;
+    for (const fr of frames) { const res = fr.det[k] - (coef[0] + coef[1] * fr.t + coef[2] * (fr.t >= 35 ? 1 : 0)); ss += res * res; peak = Math.max(peak, Math.abs(res)); }
+    per.push({ drift: coef[1] * 60, step: coef[2], breathRms: Math.sqrt(ss / n), breathPeak: peak });
+  }
+  // detection delay of the sudden move on its axis
+  const ks = m.stepAxis, base = frames.filter(f => f.t >= 25 && f.t < 35).reduce((s, f) => s + f.det[ks], 0) / 20;
+  let seenAt = null;
+  if (m.step > 0) for (const fr of frames) if (fr.t >= 35 && Math.abs(fr.det[ks] - base) > 0.5 * m.step) { seenAt = fr.t; break; }
+  const over = frames.filter(f => norm3(f.det) > m.tol).length / n, overTrue = frames.filter(f => norm3(f.truth) > m.tol).length / n;
+  const maxErr = Math.max(...frames.map(f => norm3([0, 1, 2].map(k => f.truth[k] - f.det[k]))));
+  return { frames, per, seenAt, over, overTrue, maxErr, m: { ...m }, dof: S.dof };
+}
+function renderMon() {
+  const R = monResult;
+  if (!R) { showEmpty(ref ? 'Set the motion and run 60 s of treatment.' : 'Draw an ROI first.'); $('#monChart').hidden = true; return; }
+  const m = R.m, per = R.per, aS = AXES[m.stepAxis], aD = AXES[m.driftAxis];
+  let t = '';
+  if (m.step > 0) {
+    const got = per[m.stepAxis].step, frac = got / m.step, cls = frac > .85 ? 'good' : frac > .3 ? 'warn' : 'bad';
+    t += tile('Sudden ' + mm(m.step, 1) + ' move in ' + aS.k, mm(got, 1), (R.seenAt != null ? 'seen ' + nf(R.seenAt - 35, 1) + ' s after it happened' : 'never crossed half its size') + ' · ' + nf(frac * 100, 0) + ' % of the true move', cls, frac > .85 ? 'found' : frac > .3 ? 'partly found' : 'not seen');
+  } else t += tile('Sudden move', '0.0<small>mm</small>', 'none applied', 'idle', 'off');
+  if (m.drift > 0) {
+    const got = per[m.driftAxis].drift, frac = got / m.drift, cls = frac > .85 ? 'good' : frac > .3 ? 'warn' : 'bad';
+    t += tile('Drift of ' + mm(m.drift, 1) + ' in ' + aD.k + ' over 60 s', mm(got, 1), 'reported drift · ' + nf(frac * 100, 0) + ' % of the true drift', cls, frac > .85 ? 'found' : frac > .3 ? 'partly found' : 'not seen');
+  } else t += tile('Slow drift', '0.0<small>mm</small>', 'none applied', 'idle', 'off');
+  const bk = [0, 1, 2].reduce((b, k) => per[k].breathPeak > per[b].breathPeak ? k : b, 0), bp = per[bk].breathPeak;
+  t += tile('Breathing seen as motion', '±' + mm(bp, 1), m.breath > 0 ? 'largest apparent swing, in ' + AXES[bk].k + ' · nothing moved rigidly' : 'no breathing applied', m.breath === 0 ? 'idle' : bp < .5 * m.tol ? 'good' : bp < m.tol ? 'warn' : 'bad', m.breath > 0 ? (bp < .5 * m.tol ? 'quiet' : bp < m.tol ? 'noticeable' : 'would trip the gate') : '');
+  t += tile('Time beyond ±' + nf(m.tol, 1) + ' mm', nf(R.over * 100, 0) + '<small>%</small>', 'as reported · truly beyond: ' + nf(R.overTrue * 100, 0) + ' %', Math.abs(R.over - R.overTrue) < .1 ? 'good' : 'warn');
+  t += tile('Worst 3D error', mm(R.maxErr, 1), 'largest difference between reported and true at any moment', R.maxErr < 1 ? 'good' : R.maxErr < 2.5 ? 'warn' : 'bad');
+  $('#tiles').innerHTML = t; $('#resultsEmpty').hidden = true; $('#notice').hidden = false; $('#monChart').hidden = false;
+  $('#resultNote').textContent = '60 s of treatment · ' + (R.dof === 6 ? '6 DoF' : 'translations only') + ' · variation ' + nf(S.vary, 1) + ' mm' + (todayActive() ? ' · today\'s surface differs' : '');
+  const [ot, ox, wt, wx] = noticeMon(R);
+  $('#obsTitle').textContent = ot; $('#obsText').textContent = ox; $('#whyTitle').textContent = wt; $('#whyText').textContent = wx;
+  $('#details').innerHTML = detailsMon(R);
+  drawMonChart();
+}
+function noticeMon(R) {
+  const m = R.m, per = R.per, aS = AXES[m.stepAxis], aD = AXES[m.driftAxis];
+  const stepFrac = m.step > 0 ? per[m.stepAxis].step / m.step : null, driftFrac = m.drift > 0 ? per[m.driftAxis].drift / m.drift : null;
+  const bk = [0, 1, 2].reduce((b, k) => per[k].breathPeak > per[b].breathPeak ? k : b, 0), bp = per[bk].breathPeak;
+  if (stepFrac !== null && stepFrac < .3) return ['The sudden move in ' + aS.long + ' is missed.', 'The patient moved ' + mm(m.step, 1) + ' at 35 s; the trace barely reacts. If the system were gating on this ROI, the beam would stay on.', 'The ROI slides along itself in ' + aS.k, 'Nothing in the ROI changes shape when the patient moves that way, so the live surface still fits the reference. Add anatomy with slope in ' + aS.k + ' — or choose a different test direction to confirm the ROI does see the others.'];
+  if (driftFrac !== null && driftFrac < .3 && m.drift >= 1) return ['The slow drift in ' + aD.long + ' is missed.', mm(m.drift, 1) + ' of drift over the minute, but the reported trace stays near zero in ' + aD.k + '.', 'Blind direction', 'The ROI has no shape variation along ' + aD.k + '. Slow motion is no easier to see than sudden motion: the system does not watch motion, it compares shapes.'];
+  if (m.breath > 0 && bp >= m.tol) return ['Breathing would trip the gate.', 'Nothing moved rigidly, yet the reported trace swings ±' + mm(bp, 1) + ' in ' + AXES[bk].k + ' — beyond the ±' + nf(m.tol, 1) + ' mm tolerance, ' + nf(R.over * 100, 0) + ' % of the time.', 'A changing shape looks like motion', 'The ROI covers surface that rises and falls with breathing. The fit expresses that shape change as the rigid motion that best explains it. Place the ROI on surface that breathes less, widen it onto stable anatomy so the change is diluted, or accept that this ROI tracks breathing.'];
+  if (stepFrac !== null && stepFrac < .85) return ['The sudden move is only partly reported.', 'Reported ' + mm(per[m.stepAxis].step, 1) + ' of the ' + mm(m.step, 1) + ' move, seen ' + (R.seenAt != null ? nf(R.seenAt - 35, 1) + ' s later' : 'late') + '.', 'Weak information in ' + aS.k, 'This ROI has only a little slope change along ' + aS.k + ', so part of the move is absorbed by breathing and surface change. Compare the light for ' + aS.k + ' above.'];
+  return ['Motion is tracked faithfully.', 'The sudden move and the drift are reported' + (m.breath > 0 ? ', with breathing appearing as only ±' + mm(bp, 1) : '') + '. Worst 3D error at any moment: ' + mm(R.maxErr, 1) + '.', 'Shape in every direction, little breathing in the ROI', 'This ROI contains enough shape variation to pin down each direction, and the surface inside it changes little with breathing. Try moving the ROI onto the abdomen, raising the breathing, or opening "Today\'s surface differs".'];
+}
+function detailsMon(R) {
+  let m = tbl(['Axis', 'True drift / 60 s', 'Reported drift', 'True sudden move', 'Reported move', 'Apparent breathing (RMS / peak)'],
+    [0, 1, 2].map(k => [AXES[k].name, nf(k === R.m.driftAxis ? R.m.drift : 0, 1), nf(R.per[k].drift, 2), nf(k === R.m.stepAxis ? R.m.step : 0, 1), nf(R.per[k].step, 2), nf(R.per[k].breathRms, 2) + ' / ' + nf(R.per[k].breathPeak, 2)]));
+  m += '<p>121 captures over 60 s (every 0.5 s). The true motion is a linear drift plus a step at 35 s; breathing is a smooth lift of the thorax and abdomen with a 4 s period, zero at end-exhale when the reference was captured. Each capture is registered with warm start from the previous frame. Drift, step and breathing are separated by least squares (reported = a + b·t + c·step), so the apparent breathing is the residual swing.</p>';
+  m += lightsDetail() + bodyDesc();
+  return m;
+}
+function drawMonChart() {
+  const cv = $('#monCanvas'), R = monResult; if (!cv || !R) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2), W = cv.clientWidth || 1100, narrow = W < 600, H = narrow ? 420 : 300;
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cv.style.height = H + 'px';
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = '#0f1c25'; g.fillRect(0, 0, W, H);
+  const F = R.frames, L = 46, Rt = W - 14, rowH = (H - 26) / 3, font = getComputedStyle(document.body).fontFamily;
+  let lim = Math.max(R.m.tol * 1.3, 1);
+  for (const fr of F) for (let k = 0; k < 3; k++) lim = Math.max(lim, Math.abs(fr.truth[k]), Math.abs(fr.det[k]));
+  lim *= 1.1;
+  for (let k = 0; k < 3; k++) {
+    const T = 8 + k * rowH, B = T + rowH - 14, X = t => L + t / 60 * (Rt - L), Y = v => (T + B) / 2 - v / lim * (B - T) / 2;
+    g.fillStyle = 'rgba(255,200,97,.09)'; g.fillRect(L, Y(R.m.tol), Rt - L, Y(-R.m.tol) - Y(R.m.tol));
+    g.strokeStyle = '#223e4e'; g.lineWidth = 1; g.beginPath(); g.moveTo(L, Y(0)); g.lineTo(Rt, Y(0)); g.stroke();
+    g.strokeStyle = 'rgba(255,255,255,.18)'; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(X(35), T); g.lineTo(X(35), B); g.stroke(); g.setLineDash([]);
+    g.font = '600 11px ' + font; g.fillStyle = AXES[k].col; g.textAlign = 'left'; g.textBaseline = 'top'; g.fillText(AXES[k].name, L + 4, T);
+    g.font = '400 10px ' + font; g.fillStyle = '#8ea5af'; g.textAlign = 'right'; g.textBaseline = 'middle';
+    g.fillText('+' + nf(lim, 0), L - 5, T + 4); g.fillText('−' + nf(lim, 0), L - 5, B - 4); g.fillText('0', L - 5, Y(0));
+    g.strokeStyle = '#dfe9ee'; g.lineWidth = 1.6; g.beginPath(); F.forEach((fr, i) => i ? g.lineTo(X(fr.t), Y(fr.truth[k])) : g.moveTo(X(fr.t), Y(fr.truth[k]))); g.stroke();
+    g.strokeStyle = AXES[k].col; g.lineWidth = 1.6; g.beginPath(); F.forEach((fr, i) => i ? g.lineTo(X(fr.t), Y(fr.det[k])) : g.moveTo(X(fr.t), Y(fr.det[k]))); g.stroke();
+  }
+  g.font = '400 10px ' + font; g.fillStyle = '#8ea5af'; g.textAlign = 'center'; g.textBaseline = 'bottom';
+  for (let t = 0; t <= 60; t += 10) g.fillText(t + ' s', L + t / 60 * (Rt - L), H - 2);
+}
+
+/* ---------------------------------------------------------------- scheduling */
+let refTimer = null, shiftTimer = null;
+function maskChanged(immediate) {
+  monResult = null; lastFit = null;
+  clearTimeout(refTimer);
+  const go = () => { rebuildRef(); renderLights(); draw3D(); scheduleShift(); if (S.tab === 'mon') renderMon(); };
+  if (immediate) go(); else refTimer = setTimeout(go, 40);
+}
+function scheduleShift() {
+  clearTimeout(shiftTimer);
+  shiftTimer = setTimeout(() => { if (S.tab !== 'shift') return; runShift(); renderShift(); if (S.v3d === 'fit') draw3D(); }, 120);
+}
+function todayChanged() {
+  rebuildLiveBody(); monResult = null; lastFit = null;
+  $('#todayPill').hidden = !todayActive();
+  if (S.tab === 'shift') scheduleShift(); else renderMon();
+}
+function patientChanged() {
+  rebuildReferenceBody(); rebuildRef(); monResult = null; lastFit = null;
+  renderLights(); draw3D();
+  if (S.tab === 'shift') scheduleShift(); else renderMon();
+}
+
+/* ---------------------------------------------------------------- controls */
+function buildShiftSliders() {
+  const host = $('#shiftSliders'); let h = '';
+  for (let k = 0; k < S.dof; k++) {
+    const a = AXES[k], rot = k >= 3;
+    h += '<div class="ctl"><label for="sh' + k + '">' + a.name + '<output id="osh' + k + '">' + signed(S.shift[k], 1) + ' ' + a.unit + '</output></label><input type="range" id="sh' + k + '" data-k="' + k + '" min="' + (rot ? -3 : -10) + '" max="' + (rot ? 3 : 10) + '" step="' + (rot ? .25 : .5) + '" value="' + S.shift[k] + '"></div>';
+  }
+  h += '<div style="display:flex;gap:6px;margin-top:4px"><button class="btn ghost sm" id="zeroShift">Zero all</button><button class="btn ghost sm" id="presetShift" title="Apply an example shift in all three directions at once: X +4, Y −3, Z +2 mm">Example shift in all three</button></div>';
+  host.innerHTML = h;
+  $$('#shiftSliders input').forEach(el => el.oninput = () => { const k = +el.dataset.k; S.shift[k] = +el.value; $('#osh' + k).textContent = signed(S.shift[k], 1) + ' ' + AXES[k].unit; scheduleShift(); });
+  $('#zeroShift').onclick = () => { S.shift = [0, 0, 0, 0, 0, 0]; buildShiftSliders(); scheduleShift(); };
+  $('#presetShift').onclick = () => { S.shift = [4, -3, 2, S.dof === 6 ? 1.5 : 0, S.dof === 6 ? -1 : 0, S.dof === 6 ? 2 : 0]; buildShiftSliders(); scheduleShift(); };
+}
+$('#dofBox').onchange = e => { S.dof = e.target.checked ? 6 : 3; if (S.dof === 3) { S.shift[3] = S.shift[4] = S.shift[5] = 0; } buildShiftSliders(); rebuildRef(); renderLights(); monResult = null; lastFit = null; if (S.tab === 'shift') scheduleShift(); else renderMon(); };
+$$('.tabs button').forEach(b => b.onclick = () => {
+  S.tab = b.dataset.tab; $$('.tabs button').forEach(o => o.setAttribute('aria-pressed', String(o === b)));
+  $('#tabShift').hidden = S.tab !== 'shift'; $('#tabMon').hidden = S.tab !== 'mon';
+  if (S.tab === 'shift') { runShift(); renderShift(); } else renderMon();
+  if (S.v3d === 'fit') draw3D();
+});
+function bind(id, out, fmt, set) {
+  const el = $(id); const apply = () => { const v = +el.value; set(v); $(out).textContent = fmt(v); };
+  el.oninput = () => { apply(); };
+  apply();
+  return el;
+}
+bind('#vary', '#oVary', v => mm(v, 1), v => { S.vary = v; });
+$('#vary').addEventListener('input', () => { monResult = null; lastFit = null; if (S.tab === 'shift') scheduleShift(); else renderMon(); });
+bind('#mBreath', '#oBreath', v => mm(v, 1), v => { S.mon.breath = v; });
+bind('#mDrift', '#oDrift', v => mm(v, 1), v => { S.mon.drift = v; });
+bind('#mStep', '#oStep', v => mm(v, 1), v => { S.mon.step = v; });
+bind('#mTol', '#oTol', v => '±' + mm(v, 1), v => { S.mon.tol = v; });
+$$('.seg[data-axis]').forEach(seg => seg.querySelectorAll('button').forEach(b => b.onclick = () => {
+  seg.querySelectorAll('button').forEach(o => o.setAttribute('aria-pressed', String(o === b)));
+  if (seg.dataset.axis === 'drift') S.mon.driftAxis = +b.dataset.v; else S.mon.stepAxis = +b.dataset.v;
+}));
+$('#runMon').onclick = runMonitoring;
+const todayBind = (id, out, fmt, key) => { const el = $(id); el.oninput = () => { S.today[key] = +el.value; $(out).textContent = fmt(+el.value); todayChanged(); }; };
+todayBind('#tArm', '#oTArm', v => signed(v, 0) + '°', 'arm');
+todayBind('#tHead', '#oTHead', v => signed(v, 0) + '°', 'head');
+todayBind('#tBreast', '#oTBreast', v => signed(v, 0) + '%', 'breast');
+todayBind('#tAbd', '#oTAbd', v => signed(v, 0) + ' mm', 'abd');
+todayBind('#tSwell', '#oTSwell', v => nf(v, 1) + ' mm', 'swell');
+$('#todayReset').onclick = () => { S.today = { arm: 0, head: 0, breast: 0, abd: 0, swell: 0 }; ['#tArm', '#tHead', '#tBreast', '#tAbd', '#tSwell'].forEach(id => { $(id).value = 0; }); $('#oTArm').textContent = '0°'; $('#oTHead').textContent = '0°'; $('#oTBreast').textContent = '0%'; $('#oTAbd').textContent = '0 mm'; $('#oTSwell').textContent = '0.0 mm'; todayChanged(); };
+const patientBind = (id, out, fmt, key) => { const el = $(id); el.oninput = () => { S.patient[key] = +el.value; $(out).textContent = fmt(+el.value); }; el.onchange = () => patientChanged(); };
+patientBind('#pArm', '#oPArm', v => v < 10 ? 'by the sides' : v > 140 ? 'up above the head' : v + '°', 'armAngle');
+patientBind('#pBreastL', '#oPBreastL', v => nf(v, 1), 'breastL');
+patientBind('#pBreastR', '#oPBreastR', v => nf(v, 1), 'breastR');
+patientBind('#pDetail', '#oPDetail', v => nf(v, 2) + ' mm', 'detail');
+
+/* drawing tools */
+function setTool(t) { S.tool = t; $$('[data-tool]').forEach(o => o.setAttribute('aria-pressed', String(o.dataset.tool === t))); const cv = $('#v3d'); cv.classList.toggle('rotate', t === 'rotate'); cv.classList.toggle('pan', t === 'pan'); draw3D(); }
+$$('[data-tool]').forEach(b => b.onclick = () => setTool(b.dataset.tool));
+$('#brushSize').oninput = e => { S.brush = +e.target.value; $('#brushOut').textContent = S.brush + ' mm'; draw3D(); };
+$('#undoBtn').onclick = () => { if (!S.undo.length) return; S.mask = S.undo.pop(); maskChanged(true); };
+$('#clearBtn').onclick = () => { pushUndo(); S.mask.fill(0); maskChanged(true); };
+$('#mirrorBtn').onclick = () => { pushUndo(); for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) if (S.mask[j * NX + i]) S.mask[j * NX + (NX - 1 - i)] = 1; maskChanged(true); };
+$('#viewTop').onclick = () => setView({ yaw: 0, pitch: Math.PI / 2 });
+$('#viewRoi').onclick = zoomToRoi;
+$('#viewBody').onclick = () => setView({ cx: 0, cy: 0, span: 2000 });
+PRESETS.forEach(p => { const b = document.createElement('button'); b.className = 'tb preset'; b.textContent = p.n; b.onclick = () => { pushUndo(); S.mask.fill(0); p.f(); maskChanged(true); zoomToRoi(); }; $('#presets').appendChild(b); });
+
+/* pointer: one canvas for painting, rotating, panning and zooming */
+(function () {
+  const cv = $('#v3d'); let drag = null;
+  const pos = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  const paintVal = () => (S.tool === 'erase' ? 0 : 1);
+  function panBy(dsx, dsy) {
+    // screen delta -> ground-plane delta at the current view
+    const v = S.view, sc = view3d ? view3d.sc : 1, sp = Math.sin(v.pitch), cy = Math.cos(v.yaw), sy = Math.sin(v.yaw);
+    const dyr = -dsx / sc, dxr = dsy / (Math.max(0.15, sp) * sc);
+    const dx = dxr * cy + dyr * sy, dy = -dxr * sy + dyr * cy;
+    setView({ cx: v.cx - dx, cy: v.cy - dy });
+  }
+  cv.addEventListener('pointerdown', e => {
+    const p = pos(e), mode = (e.button === 2 || e.shiftKey) ? 'rotate' : e.button === 1 ? 'pan' : S.tool;
+    if (mode === 'rotate') drag = { kind: 'rotate', start: p, yaw: S.view.yaw, pitch: S.view.pitch };
+    else if (mode === 'pan') drag = { kind: 'pan', last: p };
+    else {
+      const w = pick3D(p[0], p[1]);
+      if (!w) { drag = { kind: 'rotate', start: p, yaw: S.view.yaw, pitch: S.view.pitch }; }
+      else if (mode === 'rect') { pushUndo(); rectDrag = { x0: w[0], y0: w[1], x1: w[0], y1: w[1] }; drag = { kind: 'rect' }; }
+      else { pushUndo(); paintDisc(w[0], w[1], S.brush, paintVal()); drag = { kind: 'paint', last: w }; draw3D(); }
+    }
+    cv.classList.add('dragging');
+    try { cv.setPointerCapture(e.pointerId); } catch (_) {} e.preventDefault();
+  });
+  cv.addEventListener('pointermove', e => {
+    const p = pos(e);
+    if (!drag) { hover = (S.tool === 'brush' || S.tool === 'erase') ? pick3D(p[0], p[1]) : null; draw3D(); return; }
+    if (drag.kind === 'rotate') { setView({ yaw: drag.yaw - (p[0] - drag.start[0]) * .008, pitch: drag.pitch - (p[1] - drag.start[1]) * .006 }); return; }
+    if (drag.kind === 'pan') { panBy(p[0] - drag.last[0], p[1] - drag.last[1]); drag.last = p; return; }
+    const w = pick3D(p[0], p[1]); if (!w) return; hover = w;
+    if (drag.kind === 'rect') { rectDrag.x1 = w[0]; rectDrag.y1 = w[1]; draw3D(); return; }
+    paintStroke(drag.last[0], drag.last[1], w[0], w[1], S.brush, paintVal()); drag.last = w; draw3D();
+  });
+  const end = () => {
+    if (!drag) return; const was = drag; drag = null; cv.classList.remove('dragging');
+    if (was.kind === 'rect' && rectDrag) { fillRect(rectDrag.x0, rectDrag.x1, rectDrag.y0, rectDrag.y1, 1); rectDrag = null; }
+    if (was.kind === 'rect' || was.kind === 'paint') maskChanged(false);
+  };
+  cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+  cv.addEventListener('pointerleave', () => { hover = null; if (!drag) draw3D(); });
+  cv.addEventListener('contextmenu', e => e.preventDefault());
+  cv.addEventListener('dblclick', () => setView({ yaw: 0, pitch: Math.PI / 2 }));
+  cv.addEventListener('wheel', e => {
+    e.preventDefault();
+    const p = pos(e), w = pick3D(p[0], p[1]), f = Math.pow(1.15, e.deltaY > 0 ? 1 : -1), v = S.view, ns = clamp(v.span * f, 120, 2000), r = ns / v.span;
+    if (w) setView({ span: ns, cx: w[0] + (v.cx - w[0]) * r, cy: w[1] + (v.cy - w[1]) * r }); else setView({ span: ns });
+  }, { passive: false });
+})();
+const CAPTION_REF = $('#v3dCaption').innerHTML;
+$$('[data-v3d]').forEach(b => b.onclick = () => { S.v3d = b.dataset.v3d; $$('[data-v3d]').forEach(o => o.setAttribute('aria-pressed', String(o === b))); $('#v3dCaption').innerHTML = S.v3d === 'ref' ? CAPTION_REF : 'Signed distance between the corrected live surface and the reference, inside the ROI. Green = matched; blue/red = still apart. A green ROI with a red tile below is the lesson.'; draw3D(); });
+
+window.addEventListener('resize', () => { local3d = null; draw3D(); if (monResult && S.tab === 'mon') drawMonChart(); });
+
+/* ---------------------------------------------------------------- boot */
+rebuildReferenceBody();
+pushUndo(); PRESETS[1].f();      // start with a left-breast ROI so the first screen already has a result
+buildShiftSliders();
+maskChanged(true);
+setView({ cx: 0, cy: 300, span: 1100 });
+window.SGRT_STUDIO = { S, setView, zoomToRoi, get ref() { return ref; }, get lights() { return lights; }, get shift() { return shiftResult; }, get mon() { return monResult; }, runShift, runMonitoring, maskChanged, fillRect, fillEllipse, PRESETS };
+})();
+
+</script>
+</body>
+</html>

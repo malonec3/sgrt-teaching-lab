@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SGRT teaching lab</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%230c151b%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%279%27 fill=%27none%27 stroke=%27%236de0cf%27 stroke-width=%273%27/%3E%3C/svg%3E">
+<meta name="description" content="Interactive surface-guided radiotherapy teaching tools: teaching cases on surface topography and registration, and a patient simulator for drawing and testing ROIs.">
+<style>
+:root{--bg:#0c151b;--bar:#101b23;--line:#2a3e4a;--ink:#e2eef2;--dim:#afc0c7;--dim2:#8ea5af;--sig:#6de0cf}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{display:flex;flex-direction:column}
+.bar{flex:none;display:flex;align-items:center;gap:14px;padding:8px 16px;background:var(--bar);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.brand{font:600 10px ui-monospace,"SFMono-Regular",Consolas,monospace;letter-spacing:.09em;color:var(--dim2);white-space:nowrap}
+.tabs{display:inline-flex;background:#091117;border:1px solid #31434e;border-radius:9px;padding:3px;gap:3px}
+.tabs a{font:600 13px inherit;color:var(--dim);text-decoration:none;padding:8px 18px;border-radius:6px;white-space:nowrap}
+.tabs a:hover{color:var(--ink)}
+.tabs a[aria-current=page]{color:#082b2a;background:var(--sig)}
+.tabs a:focus-visible{outline:2px solid #8effe2;outline-offset:2px}
+.open{margin-left:auto;font-size:11px;color:var(--dim2)}
+.open a{color:#93ddcf;text-decoration:none}
+.open a:hover{text-decoration:underline}
+.frames{flex:1;min-height:0;position:relative}
+.frames iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:var(--bg)}
+.frames iframe[hidden]{display:none}
+@media(max-width:600px){.bar{gap:8px;padding:6px 10px}.brand,.open{display:none}.tabs{width:100%}.tabs a{flex:1;text-align:center;padding:8px 6px;font-size:12px}}
+</style>
+</head>
+<body>
+<nav class="bar" aria-label="Simulator">
+  <span class="brand">SURFACE-GUIDED RADIOTHERAPY · TEACHING LAB</span>
+  <div class="tabs" role="tablist">
+    <a href="#cases" id="tabCases" role="tab" aria-current="page">1 · Teaching cases</a>
+    <a href="#patient" id="tabPatient" role="tab">2 · Patient simulator</a>
+  </div>
+  <span class="open">Open full screen: <a href="teaching-cases.html" target="_blank" rel="noopener">teaching cases</a> · <a href="patient-simulator.html" target="_blank" rel="noopener">patient simulator</a></span>
+</nav>
+<div class="frames">
+  <iframe id="frameCases" src="teaching-cases.html" title="Teaching cases: what the surface can and cannot tell you"></iframe>
+  <iframe id="framePatient" title="Patient simulator: draw an ROI anywhere and test what it can see" hidden></iframe>
+</div>
+<script>
+(function () {
+  var tabs = { cases: document.getElementById('tabCases'), patient: document.getElementById('tabPatient') };
+  var frames = { cases: document.getElementById('frameCases'), patient: document.getElementById('framePatient') };
+  var titles = { cases: 'Teaching cases · SGRT teaching lab', patient: 'Patient simulator · SGRT teaching lab' };
+  function show(which) {
+    if (!frames[which]) which = 'cases';
+    // the patient simulator is loaded the first time its tab is opened, so the first page paints quickly
+    if (which === 'patient' && !frames.patient.getAttribute('src')) frames.patient.setAttribute('src', 'patient-simulator.html');
+    for (var k in frames) {
+      frames[k].hidden = k !== which;
+      if (k === which) tabs[k].setAttribute('aria-current', 'page'); else tabs[k].removeAttribute('aria-current');
+    }
+    document.title = titles[which];
+    // a hidden canvas has no size; let the simulator re-measure itself when it becomes visible
+    try { frames[which].contentWindow.dispatchEvent(new Event('resize')); } catch (e) {}
+  }
+  function fromHash() { show(location.hash === '#patient' ? 'patient' : 'cases'); }
+  window.addEventListener('hashchange', fromHash);
+  fromHash();
+})();
+</script>
+</body>
+</html>
